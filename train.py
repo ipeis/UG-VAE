@@ -29,7 +29,6 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 torch.manual_seed(args.seed)
 
 model_name = args.model_name
-model_name = 'prueba'
 
 device = torch.device("cuda" if args.cuda else "cpu")
 
@@ -54,8 +53,6 @@ test_loader = torch.utils.data.DataLoader(
 
 dim_z = args.dim_z
 dim_Z = args.dim_Z
-dim_z = 2
-dim_Z = 20
 
 model = GLVAE(dim_z, dim_Z).to(device)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)

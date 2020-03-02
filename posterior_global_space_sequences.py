@@ -1,16 +1,16 @@
-from main import *
+from train_sequences import *
 from torchvision.utils import make_grid
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
 
 model = GLVAE().to(device)
 
-name = '3_series_B200'
+name = 'svhn'
 epoch = 500     # Epoch to load
 batch_size = 128    # N. images per sample
 nbatches = 200
 nsamples = 3    # N. samples per digit
-train_set = 'True'
+train_set = True
 
 
 ########################################################################################################################

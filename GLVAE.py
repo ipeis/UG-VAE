@@ -8,8 +8,8 @@ from torchvision.utils import save_image
 from sklearn.manifold import TSNE
 import os
 import numpy as np
-import matplotlib
-matplotlib.use("Pdf")
+#import matplotlib
+#matplotlib.use("Pdf")
 import matplotlib.pyplot as plt
 from torchvision.utils import make_grid
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
