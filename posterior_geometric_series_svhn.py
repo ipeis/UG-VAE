@@ -5,7 +5,7 @@ from sklearn.decomposition import KernelPCA
 
 model = GLVAE(20, 20).to(device)
 
-name = 'trained'
+name = 'cnn-GLVAE'
 epoch = 500  # Epoch to load
 batch_size = 128    # N. images per sample
 nbatches = 400

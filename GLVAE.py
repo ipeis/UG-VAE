@@ -70,7 +70,7 @@ class GLVAE(nn.Module):
         for z in z_batch:
             h21 = F.relu(self.fc21(z))
             h22 = F.relu(self.fc22(h21))
-            theta = F.relu(self.fc23(h22))
+            theta = self.fc23(h22)
             mu.append(theta[:self.dim_Z])
             #varZ.append(self.fc32(z))
             prec.append(torch.exp(theta[self.dim_Z:])**-1)
