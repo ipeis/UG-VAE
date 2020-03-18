@@ -5,8 +5,8 @@ from sklearn.decomposition import KernelPCA
 
 model = GLVAE(20, 20).to(device)
 
-name = 'cnn-GLVAE'
-epoch = 500  # Epoch to load
+name = 'CNN-GLVAE'
+epoch = 2000  # Epoch to load
 batch_size = 128    # N. images per sample
 nbatches = 400
 train_set = True
@@ -51,7 +51,7 @@ def split_digits(int_list, length):
 
 
 mnist = datasets.MNIST('../data', train=train_set, transform=transforms.Compose([transforms.Lambda(lambda image: image.convert('RGB')),
-                                                      transforms.ToTensor()]))
+                                                      transforms.ToTensor()]), download=True)
 
 loaders = []
 samplers = []
@@ -74,7 +74,7 @@ if train_set:
 else:
     split = 'test'
 svhn = datasets.SVHN('./data', split=split,
-                        transform=transforms.Compose([transforms.CenterCrop(28), transforms.ToTensor()]))
+                        transform=transforms.Compose([transforms.CenterCrop(28), transforms.ToTensor()]), download=True)
 
 loaders_svhn = []
 samplers_svhn = []

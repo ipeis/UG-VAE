@@ -33,14 +33,15 @@ class GLVAE(nn.Module):
         self.fc13 = nn.Linear(256, 2*dim_z)
 
         # Global encoder
-        self.fc21 = nn.Linear(dim_z, 256)
+        #self.fc21 = nn.Linear(dim_z, 256)
+        self.fc21 = nn.Linear(dim_z, 2*dim_Z)
         self.fc22 = nn.Linear(256, 256)
         self.fc23 = nn.Linear(256, 2*dim_Z)
 
 
         # Decoder
         self.fc31 = nn.Linear(dim_z + dim_Z, 256)
-        self.fc32 = nn.Linear(256, 256)
+        #self.fc32 = nn.Linear(256, 256)
         self.fc33 = nn.Linear(256, 28*7*7)
         self.conv31 = torch.nn.ConvTranspose2d(in_channels=28, out_channels=28, kernel_size=4, stride=2, padding=1)
         self.conv32 = torch.nn.ConvTranspose2d(in_channels=28, out_channels=28, kernel_size=4, stride=2, padding=1)
@@ -68,9 +69,9 @@ class GLVAE(nn.Module):
         mu = []
         prec = []
         for z in z_batch:
-            h21 = F.relu(self.fc21(z))
-            h22 = F.relu(self.fc22(h21))
-            theta = self.fc23(h22)
+            #h21 = F.relu(self.fc21(z))
+            #h22 = F.relu(self.fc22(h21))
+            theta = self.fc21(z)
             mu.append(theta[:self.dim_Z])
             #varZ.append(self.fc32(z))
             prec.append(torch.exp(theta[self.dim_Z:])**-1)
@@ -93,8 +94,8 @@ class GLVAE(nn.Module):
         aux = [torch.cat([z[i], Z]) for i in range(len(z))]
         aux = torch.stack(aux)
         h31 = F.relu(self.fc31(aux))
-        h32 = F.relu(self.fc32(h31))
-        h33 = F.relu(self.fc33(h32))
+        #h32 = F.relu(self.fc32(h31))
+        h33 = F.relu(self.fc33(h31))
 
         h34 = F.relu(self.conv31(h33.view(-1, 28, 7, 7)))
         #h35 = F.relu(self.conv32(h34))

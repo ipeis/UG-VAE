@@ -293,7 +293,7 @@ def split_digits(int_list, length):
 
 
 
-mnist_tr = datasets.MNIST('./data', train=True, transform=transforms.ToTensor())
+mnist_tr = datasets.MNIST('./data', train=True, transform=transforms.ToTensor(), download=True)
 
 train_loaders = []
 samplers = []
@@ -311,7 +311,7 @@ for n in range(10):
     )
 
 ########################################################################################################################
-mnist_test = datasets.MNIST('./data', train=False, transform=transforms.ToTensor())
+mnist_test = datasets.MNIST('./data', train=False, transform=transforms.ToTensor(), download=True)
 
 test_loaders = []
 samplers = []
@@ -332,7 +332,7 @@ for n in range(10):
 
 
 svhn_tr = datasets.SVHN('./data', split="train",
-                        transform=transforms.Compose([transforms.CenterCrop(28), transforms.Grayscale(num_output_channels=1), transforms.ToTensor()]),
+                        transform=transforms.Compose([transforms.CenterCrop(28), transforms.Grayscale(num_output_channels=1), transforms.ToTensor()]), download=True
                         )
 
 train_loaders_svhn = []
@@ -355,7 +355,7 @@ for n in range(10):
 
 
 svhn_test = datasets.SVHN('./data', split="test",
-                          transform=transforms.Compose([transforms.CenterCrop(28), transforms.Grayscale(num_output_channels=1), transforms.ToTensor()]),
+                          transform=transforms.Compose([transforms.CenterCrop(28), transforms.Grayscale(num_output_channels=1), transforms.ToTensor()]), download=True
                           )
 
 test_loaders_svhn = []
