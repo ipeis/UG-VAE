@@ -6,17 +6,17 @@ from torch import nn, optim
 
 ########################################################################################
 parser = argparse.ArgumentParser(description='VAE MNIST Example')
-parser.add_argument('--dim_z', type=int, default=10, metavar='N',
+parser.add_argument('--dim_z', type=int, default=20, metavar='N',
                     help='Dimensions for local latent')
-parser.add_argument('--dim_Z', type=int, default=10, metavar='N',
+parser.add_argument('--dim_Z', type=int, default=20, metavar='N',
                     help='Dimensions for global latent')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--nbatches_train', type=int, default=200, metavar='N',
+parser.add_argument('--nbatches_train', type=int, default=400, metavar='N',
                     help='Number of training batches from series (default: 200)')
-parser.add_argument('--nbatches_test', type=int, default=20, metavar='N',
+parser.add_argument('--nbatches_test', type=int, default=40, metavar='N',
                     help='Number of test batches from series (default: 20)')
-parser.add_argument('--epochs', type=int, default=500, metavar='N',
+parser.add_argument('--epochs', type=int, default=2000, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
@@ -42,29 +42,34 @@ if os.path.isdir('results/' + model_name + '/checkpoints/') == False:
     if os.path.isdir('results/' + model_name + '/figs/') == False:
         os.makedirs('results/' + model_name + '/figs/')
 
-kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
+#kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 
 ########################################################################################
 train_loader_1 = torch.utils.data.DataLoader(
     datasets.MNIST('../data', train=True, download=True,
-                   transform=transforms.ToTensor()),
-    batch_size=1, shuffle=True, **kwargs)
+                   transform=transforms.Compose([transforms.Lambda(lambda image: image.convert('RGB')),
+                                                      transforms.ToTensor()])),
+                   batch_size=1, shuffle=True)
+
 test_loader_1 = torch.utils.data.DataLoader(
-    datasets.MNIST('../data', train=False, transform=transforms.ToTensor()),
-    batch_size=1, shuffle=True, **kwargs)
+    datasets.MNIST('../data', train=False, download=True,
+                   transform=transforms.Compose([transforms.Lambda(lambda image: image.convert('RGB')),
+                                                      transforms.ToTensor()])),
+                   batch_size=1, shuffle=True)
+
 
 svhn_tr = datasets.SVHN('./data', split="train",
                         transform=transforms.Compose([transforms.CenterCrop(28),
-                                                      transforms.Grayscale(num_output_channels=1), transforms.ToTensor()]))
+                                                      transforms.ToTensor()]))
 svhn_test = datasets.SVHN('./data', split="test",
                         transform=transforms.Compose([transforms.CenterCrop(28),
-                                                      transforms.Grayscale(num_output_channels=1), transforms.ToTensor()]))
+                                                      transforms.ToTensor()]))
 train_loader_2 = torch.utils.data.DataLoader(
     svhn_tr,
-    batch_size=1, shuffle=True, **kwargs)
+    batch_size=1, shuffle=True)
 test_loader_2 = torch.utils.data.DataLoader(
     svhn_test,
-    batch_size=1, shuffle=True, **kwargs)
+    batch_size=1, shuffle=True)
 ########################################################################################
 
 
@@ -72,7 +77,7 @@ dim_z = args.dim_z
 dim_Z = args.dim_Z
 
 model = GLVAE(dim_z, dim_Z).to(device)
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
+optimizer = optim.Adam(model.parameters(), lr=1e-2)
 
 ########################################################################################
 ########################################################################################
@@ -90,6 +95,7 @@ def train_epoch(model, epoch, nbatches, batch_size, train_loader_1, train_loader
     iter_1 = iter(train_loader_1)
     iter_2 = iter(train_loader_2)
 
+    n = 0  # number of images trained
     for batch_idx in range(nbatches):
 
         # Build batch
@@ -103,8 +109,9 @@ def train_epoch(model, epoch, nbatches, batch_size, train_loader_1, train_loader
             else:
                 x, _ = iter_2.next()
             batch.append(x)
+            n += 1
 
-        data = torch.cat(batch).view(-1, 28, 28)
+        data = torch.cat(batch).view(-1, 3, 28, 28)
 
 
         data = data.to(device)
@@ -117,6 +124,8 @@ def train_epoch(model, epoch, nbatches, batch_size, train_loader_1, train_loader
         train_kl_l += kl_l.item()
         train_kl_g += kl_g.item()
         optimizer.step()
+
+
         if batch_idx % log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * batch_size, nbatches*batch_size,
@@ -124,10 +133,10 @@ def train_epoch(model, epoch, nbatches, batch_size, train_loader_1, train_loader
                        loss.item() / len(data)))
 
     print('====> Epoch: {} Average loss: {:.4f}'.format(
-        epoch, train_loss / len(train_loader_1.dataset)))
+        epoch, train_loss / n ))
 
-    return train_loss / len(train_loader_1.dataset), train_rec / len(train_loader_1.dataset), \
-           train_kl_l / len(train_loader_1.dataset), train_kl_g / len(train_loader_1.dataset)
+    return train_loss / n, train_rec / n, \
+           train_kl_l / n, train_kl_g / n
 
 
 def test(model, epoch, nbatches, batch_size, test_loader_1, test_loader_2, cuda=False, model_name='model'):
@@ -139,9 +148,10 @@ def test(model, epoch, nbatches, batch_size, test_loader_1, test_loader_2, cuda=
     test_kl_l = 0
     test_kl_g = 0
     with torch.no_grad():
-        iter_1 = iter(train_loader_1)
-        iter_2 = iter(train_loader_2)
+        iter_1 = iter(test_loader_1)
+        iter_2 = iter(test_loader_2)
 
+        n = 0  # number of images tested
         for batch_idx in range(nbatches):
 
             # Build batch
@@ -155,8 +165,10 @@ def test(model, epoch, nbatches, batch_size, test_loader_1, test_loader_2, cuda=
                 else:
                     x, _ = iter_2.next()
                 batch.append(x)
+                n += 1
 
-            data = torch.cat(batch).view(-1, 28, 28)
+            data = torch.cat(batch).view(-1, 3, 28, 28)
+            data = data.to(device)
 
             recon_batch, mu, var, mu_g, var_g = model.forward(data)
             loss, rec, kl_l, kl_g = loss_function(recon_batch, data, mu, var, mu_g, var_g)
@@ -167,15 +179,15 @@ def test(model, epoch, nbatches, batch_size, test_loader_1, test_loader_2, cuda=
 
             if batch_idx == 0:
                 n = min(data.size(0), 8)
-                comparison = torch.cat([data.view(batch_size, 1, 28, 28)[:n],
-                                        recon_batch.view(batch_size, 1, 28, 28)[:n]])
+                comparison = torch.cat([data.view(batch_size, 3, 28, 28)[:n],
+                                        recon_batch.view(batch_size, 3, 28, 28)[:n]])
                 save_image(comparison.cpu(),
                            'results/' + model_name + '/figs/reconstruction_' + str(epoch) + '.png', nrow=n)
 
-    test_loss /= len(test_loader_1.dataset)
-    test_rec /= len(test_loader_1.dataset)
-    test_kl_l /= len(test_loader_1.dataset)
-    test_kl_g /= len(test_loader_1.dataset)
+    test_loss /= n
+    test_rec /= n
+    test_kl_l /= n
+    test_kl_g /= n
     print('====> Test set loss: {:.4f}'.format(test_loss))
 
     return test_loss, test_rec, test_kl_l, test_kl_g
@@ -317,12 +329,12 @@ if __name__ == "__main__":
             sample_z = torch.randn(64, dim_z).to(device)
             sample_Z = torch.randn(dim_Z).to(device)
             sample = model.decode(sample_z, sample_Z).cpu()
-            save_image(sample.view(64, 1, 28, 28),
+            save_image(sample.view(64, 3, 28, 28),
                        'results/' + model_name + '/figs/sample_' + str(epoch) + '.png')
             plt.close('all')
             plot_losses(model, tr_losses, test_losses, tr_recs, test_recs, tr_kl_ls, test_kl_ls, tr_kl_gs, test_kl_gs,
                     model_name=model_name)
-            if np.mod(epoch, 100)==0 or epoch==1 or epoch==args.epochs:
+            if np.mod(epoch, args.log_interval)==0 or epoch==1 or epoch==args.epochs:
                 save_model(model, epoch, model_name=model_name)
                 #plot_latent(model, epoch, test_loader_1, cuda=args.cuda, model_name=model_name)
                 #plot_global_latent(model, epoch, nsamples=4, nreps=1000, nims=20, cuda=args.cuda, model_name=model_name)

@@ -5,9 +5,8 @@ from sklearn.decomposition import KernelPCA
 
 model = GLVAE(20, 20).to(device)
 
-name = 'align_E2000_BTR500_zZ_20'
-epoch = 2000
-3  # Epoch to load
+name = 'CNN-GLVAE'
+epoch = 300  # Epoch to load
 batch_size = 128    # N. images per sample
 nbatches = 400
 train_set = True
@@ -51,7 +50,8 @@ def split_digits(int_list, length):
 # Encoding and save batches from each series
 
 
-mnist = datasets.MNIST('../data', train=train_set, transform=transforms.ToTensor())
+mnist = datasets.MNIST('../data', train=train_set, transform=transforms.Compose([transforms.Lambda(lambda image: image.convert('RGB')),
+                                                      transforms.ToTensor()]))
 
 loaders = []
 samplers = []
@@ -74,8 +74,7 @@ if train_set:
 else:
     split = 'test'
 svhn = datasets.SVHN('./data', split=split,
-                        transform=transforms.Compose([transforms.CenterCrop(28), transforms.Grayscale(num_output_channels=1),
-                                                      transforms.ToTensor()]))
+                     transform=transforms.Compose([transforms.CenterCrop(28), transforms.ToTensor()]))
 
 loaders_svhn = []
 samplers_svhn = []
@@ -99,7 +98,6 @@ for n in range(10):
 ########################################################################################################################
 #       Encode all samples in the dataset
 ########################################################################################################################
-mnist = datasets.MNIST('../data', train=train_set, transform=transforms.ToTensor())
 model.eval()
 
 loader = torch.utils.data.DataLoader(
@@ -137,7 +135,7 @@ with torch.no_grad():
             batch.append(x)
             digits.append(l)
 
-        data = torch.cat(batch).view(-1, 28, 28)
+        data = torch.cat(batch).view(-1, 3, 28, 28)
         recon_batch, mu, var, mu_g, var_g = model(data)
 
         mu_list.append(mu_g)
@@ -213,7 +211,7 @@ for batch_idx in range(nbatches):
             x, _ = iters_2[n].next()
         batch.append(x)
 
-    data = torch.cat(batch).view(-1, 28, 28)
+    data = torch.cat(batch).view(-1, 3, 28, 28)
 
     recon_batch, mu, var, mu_g, var_g = model(data)
     Z_series.append(mu_g)
@@ -282,11 +280,11 @@ X = X_all[len(Z_series):]
 fig, ax = plt.subplots(figsize=(6, 6))
 
 
-plt.scatter(X_all[:, 0], X_all[:, 1], c='grey', label='mix')
+plt.scatter(X_all[:, 0], X_all[:, 1], c='grey', alpha=0.4, label='mix')
 
 colors = 'r', 'g', 'b', 'c', 'm', 'y', 'k', 'pink', 'orange', 'purple'
 for i, c in enumerate(colors[:len(series)]):
-    plt.scatter(X_series[labels == i, 0], X_series[labels == i, 1], color=c, label=series[i]['name'])
+    plt.scatter(X_series[labels == i, 0], X_series[labels == i, 1], color=c, alpha=0.4, label=series[i]['name'])
 plt.legend(loc='best')
 plt.title('Global latent space')
 
