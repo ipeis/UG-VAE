@@ -1,15 +1,15 @@
 from train_sequences import *
 from torchvision.utils import make_grid
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from torchvision import datasets, transforms
 
-
-model = GLVAE().to(device)
+device = "cpu"
+model = GLVAE(dim_z=10, dim_Z=10, channels=1, arch='k_vae').to(device)
 
 name = 'svhn'
 epoch = 500     # Epoch to load
 batch_size = 128    # N. images per sample
 nbatches = 200
-nsamples = 3    # N. samples per digit
 train_set = True
 
 
@@ -54,7 +54,7 @@ model.eval()
 
 loader = torch.utils.data.DataLoader(
         mnist,
-        batch_size=batch_size, **kwargs)
+        batch_size=batch_size)
 
 print('Encoding set...')
 
@@ -95,25 +95,25 @@ for n in range(10):
     loaders.append(torch.utils.data.DataLoader(
         mnist,
         sampler=samplers[-1],
-        batch_size=1, **kwargs)
+        batch_size=1)
     )
 
 ########################################################################################
 
-even = np.arange(args.batch_size) * 2
-even = split_digits(even, args.batch_size)
+even = np.arange(batch_size) * 2
+even = split_digits(even, batch_size)
 
-odd = np.arange(args.batch_size) * 2 + 1
-odd = split_digits(odd, args.batch_size)
+odd = np.arange(batch_size) * 2 + 1
+odd = split_digits(odd, batch_size)
 
 fibonacci = [0, 1]
-for i in range(2, args.batch_size):
+for i in range(2, batch_size):
     fibonacci.append(fibonacci[i-1]+fibonacci[i-2])
-fibonacci = split_digits(fibonacci, args.batch_size)
+fibonacci = split_digits(fibonacci, batch_size)
 primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103,
           107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223,
           227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283]
-primes = split_digits(primes, args.batch_size)
+primes = split_digits(primes, batch_size)
 
 series = [
     {'name': 'even',

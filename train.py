@@ -1,20 +1,34 @@
 from GLVAE import *
+from MLVAE import *
 import argparse
 from torchvision import datasets, transforms
 from torch import nn, optim
+from datasets import *
+from torchvision.utils import save_image
 
-
-########################################################################################
-parser = argparse.ArgumentParser(description='VAE MNIST Example')
+########################################################################################################################
+parser = argparse.ArgumentParser(description='Train GLVAE')
 parser.add_argument('--dim_z', type=int, default=10, metavar='N',
                     help='Dimensions for local latent')
 parser.add_argument('--dim_Z', type=int, default=10, metavar='N',
                     help='Dimensions for global latent')
-parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+parser.add_argument('--dataset', type=str, default='celeba',
+                    help='Name of the dataset')
+parser.add_argument('--model', type=str, default='glvae',
+                    help='model design (glvae or mlvae)')
+parser.add_argument('--arch', type=str, default='beta_vae',
+                    help='Architecture for the model')
+parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
 parser.add_argument('--epochs', type=int, default=500, metavar='N',
                     help='number of epochs to train (default: 10)')
-parser.add_argument('--no-cuda', action='store_true', default=False,
+parser.add_argument('--beta_l', type=float, default=1.0, metavar='N',
+                    help='Value for local beta disentanglement factor')
+parser.add_argument('--beta_g', type=float, default=1.0, metavar='N',
+                    help='Value for global beta disentanglement factor')
+parser.add_argument('--save_each', type=int, default=10, metavar='N',
+                    help='save model and figures each _ epochs (default: 10)')
+parser.add_argument('--no_cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
@@ -24,7 +38,7 @@ parser.add_argument('--model_name', type=str, default='trained',
                     help='name for the model to be saved')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
-########################################################################################
+########################################################################################################################
 
 torch.manual_seed(args.seed)
 
@@ -35,31 +49,67 @@ device = torch.device("cuda" if args.cuda else "cpu")
 if os.path.isdir('results/' + model_name + '/checkpoints/') == False:
     os.makedirs('results/' + model_name + '/checkpoints/')
 
-    if os.path.isdir('results/' + model_name + '/figs/') == False:
-        os.makedirs('results/' + model_name + '/figs/')
+if os.path.isdir('results/' + model_name + '/figs/') == False:
+    os.makedirs('results/' + model_name + '/figs/')
 
-kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
+if os.path.isdir('results/' + model_name + '/figs/reconstructions') == False:
+    os.makedirs('results/' + model_name + '/figs/reconstructions')
 
-########################################################################################
-train_loader = torch.utils.data.DataLoader(
-    datasets.MNIST('../data', train=True, download=True,
-                   transform=transforms.ToTensor()),
-    batch_size=args.batch_size, shuffle=True, **kwargs)
-test_loader = torch.utils.data.DataLoader(
-    datasets.MNIST('../data', train=False, transform=transforms.ToTensor()),
-    batch_size=args.batch_size, shuffle=True, **kwargs)
-########################################################################################
+if os.path.isdir('results/' + model_name + '/figs/samples/') == False:
+    os.makedirs('results/' + model_name + '/figs/samples/')
+
+
+#kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
+
+########################################################################################################################
+if args.dataset=='mnist_series':
+    assert (args.dataset=='mnist_series' and args.batch_size == 128), 'mnist_series dataset is only for batches of 128 images.'
+
+data_tr, _,  data_test = get_data(args.dataset)
+
+"""
+if dataset=='celebA':
+
+    data_tr = CelebA('./data/', split="train",
+                     transform=transforms.ToTensor(), download=False)   #download=True for downloading the dataset
+    data_test = CelebA('./data/', split="test",
+                       transform=transforms.ToTensor(), download=False)
+if dataset=='mnist':
+    data_tr = datasets.MNIST('../data', train=True, download=True,
+                   transform=transforms.ToTensor())
+    data_test = datasets.MNIST('../data', train=False, download=True,
+                   transform=transforms.ToTensor())
+"""
+
+if args.dataset == 'mnist_series' or args.dataset == 'mnist_svhn_series':
+    batch_size = 1
+else:
+    batch_size = args.batch_size
+
+train_loader = torch.utils.data.DataLoader(data_tr, batch_size = batch_size, shuffle=True)
+test_loader = torch.utils.data.DataLoader(data_test, batch_size = batch_size, shuffle=True)
+########################################################################################################################
 
 
 dim_z = args.dim_z
 dim_Z = args.dim_Z
 
-model = GLVAE(dim_z, dim_Z).to(device)
+distribution = distributions[args.dataset]
+nchannels = nchannels[args.dataset]
+
+if args.model == 'mlvae':
+    model = MLVAE(channels=nchannels, dim_z=dim_z, dim_Z=dim_Z, arch=args.arch).to(device)
+elif args.model =='glvae':
+    model = GLVAE(channels=nchannels, dim_z=dim_z, dim_Z=dim_Z, arch=args.arch).to(device)
+
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-########################################################################################
-########################################################################################
-########################################################################################
+beta_l = torch.tensor(args.beta_l).to(device)
+beta_g = torch.tensor(args.beta_g).to(device)
+
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
 
 def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=10):
     cuda = cuda and torch.cuda.is_available()
@@ -69,11 +119,21 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
     train_rec = 0
     train_kl_l = 0
     train_kl_g = 0
+    nims = len(train_loader.dataset)
+    if args.dataset=='mnist_svhn' or args.dataset=='celeba_faces' or args.dataset=='celeba_faces_batch':
+        #Reset loader each epoch
+        data_tr.reset()
+        #train_loader = torch.utils.data.DataLoader(data_tr, batch_size=args.batch_size, shuffle=True)
+    elif args.dataset=='mnist_series' or args.dataset=='mnist_svhn_series':
+        data_tr.reset()
+        nims = data_tr.nbatches * data_tr.batch_size
+
+
     for batch_idx, (data, _) in enumerate(train_loader):
-        data = data.to(device)
+        data = data.to(device).view(-1, nchannels, data.shape[-2], data.shape[-1])
         optimizer.zero_grad()
         recon_batch, mu, var, mu_g, var_g = model.forward(data)
-        loss, rec, kl_l, kl_g = loss_function(recon_batch, data, mu, var, mu_g, var_g)
+        loss, rec, kl_l, kl_g = loss_function(recon_batch, data, mu, var, mu_g, var_g, beta_l, beta_g, distribution)
         loss.backward()
         train_loss += loss.item()
         train_rec += rec.item()
@@ -82,15 +142,15 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
         optimizer.step()
         if batch_idx % log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
+                epoch, batch_idx * len(data), nims,
                        100. * batch_idx / len(train_loader),
                        loss.item() / len(data)))
 
     print('====> Epoch: {} Average loss: {:.4f}'.format(
-        epoch, train_loss / len(train_loader.dataset)))
+        epoch, train_loss / nims))
 
-    return train_loss / len(train_loader.dataset), train_rec / len(train_loader.dataset), \
-           train_kl_l / len(train_loader.dataset), train_kl_g / len(train_loader.dataset)
+    return train_loss / nims, train_rec / nims, \
+           train_kl_l / nims, train_kl_g / nims
 
 
 def test(model, epoch, test_loader, cuda=False, model_name='model'):
@@ -101,96 +161,40 @@ def test(model, epoch, test_loader, cuda=False, model_name='model'):
     test_rec = 0
     test_kl_l = 0
     test_kl_g = 0
+    nims = len(test_loader.dataset)
     with torch.no_grad():
+        if args.dataset == 'mnist_svhn' or args.dataset=='celeba_faces' or args.dataset=='celeba_faces_batch':
+            # Reset loader each epoch
+            data_test.reset()
+            #test_loader = torch.utils.data.DataLoader(data_test, batch_size=args.batch_size, shuffle=True)
+        elif args.dataset=='mnist_series' or args.dataset=='mnist_svhn_series':
+            data_test.reset()
+            nims = data_test.nbatches * data_test.batch_size
         for i, (data, _) in enumerate(test_loader):
-            data = data.to(device)
-            recon_batch, mu, var, mu_g, var_g = model.forward(data)
-            loss, rec, kl_l, kl_g = loss_function(recon_batch, data, mu, var, mu_g, var_g)
+            data = data.to(device).view(-1, nchannels, data.shape[-2], data.shape[-1])
+            recon_batch, mu, var, mu_g,  var_g = model.forward(data)
+            loss, rec, kl_l, kl_g = loss_function(recon_batch, data, mu, var, mu_g, var_g, beta_l, beta_g, distribution)
             test_loss += loss.item()
             test_rec += rec.item()
             test_kl_l += kl_l.item()
             test_kl_g += kl_g.item()
 
-            if i == 0:
+            if i == 0 and (np.mod(epoch, args.save_each)==0 or epoch==1 or epoch==args.epochs):
                 n = min(data.size(0), 8)
                 comparison = torch.cat([data[:n],
-                                        recon_batch.view(test_loader.batch_size, 1, 28, 28)[:n]])
+                                        recon_batch[:n]])
                 save_image(comparison.cpu(),
-                           'results/' + model_name + '/figs/reconstruction_' + str(epoch) + '.png', nrow=n)
+                           'results/' + model_name + '/figs/reconstructions/reconstruction_' + str(epoch) + '.png', nrow=n)
 
-    test_loss /= len(test_loader.dataset)
-    test_rec /= len(test_loader.dataset)
-    test_kl_l /= len(test_loader.dataset)
-    test_kl_g /= len(test_loader.dataset)
+    test_loss /= nims
+    test_rec /= nims
+    test_kl_l /= nims
+    test_kl_g /= nims
     print('====> Test set loss: {:.4f}'.format(test_loss))
 
     return test_loss, test_rec, test_kl_l, test_kl_g
 
 
-def plot_latent(model, epoch, test_loader, cuda=False, model_name='model'):
-    cuda = cuda and torch.cuda.is_available()
-    device = torch.device("cuda" if cuda else "cpu")
-    model.eval()
-    test_loss = 0
-    z = []
-    labels = []
-    with torch.no_grad():
-        for i, (data, l) in enumerate(test_loader):
-            data = data.to(device)
-            labels.append(l.to(device))
-            recon_batch, mu, var, mu_g, var_g = model.forward(data)
-            z.append(model.reparameterize(mu, var))
-
-    z = torch.cat(z).cpu().numpy()[:1000]
-    labels = torch.cat(labels).cpu().numpy()[:1000]
-
-    # print('Performing t-SNE...')
-
-    # X = TSNE(n_components=2, random_state=0).fit_transform(z)
-
-    X = z
-    plt.close('all')
-    colors = 'r', 'g', 'b', 'c', 'm', 'y', 'k', 'pink', 'orange', 'purple'
-    for i, c in enumerate(colors):
-        plt.scatter(X[labels == i, 0], X[labels == i, 1], c=c, label=str(i))
-
-    plt.legend(loc='best')
-    plt.savefig('results/' + model_name + '/figs/local_latent_epoch_' + str(epoch) + '.pdf')
-
-
-def plot_global_latent(model, epoch, nsamples, nreps, nims, cuda=False, model_name='model'):
-    cuda = cuda and torch.cuda.is_available()
-    device = torch.device("cuda" if cuda else "cpu")
-    model.eval()
-
-    sample_z = torch.randn(nsamples, model.dim_z).to(device)
-
-    # mu_Z, var_Z = model.global_encode(sample_z)
-    # samples_Z = torch.stack([model.reparameterize(mu_Z, var_Z) for n in range(nreps)])
-    samples_Z = torch.randn(nreps, model.dim_Z).to(device)
-
-    pick = np.random.randint(0, len(samples_Z), nims)
-    for s, sample_Z in enumerate(samples_Z[pick]):
-        sample = model.decode(sample_z, sample_Z).cpu()
-        sample = sample.view(nsamples, 1, 28, 28)
-        sample = make_grid(sample, nrow=2, padding=2)
-        save_image(sample, 'results/' + model_name + '/figs/Z' + str(s) + '_' + str(epoch) + '.png')
-
-    Z = samples_Z.detach().cpu().numpy()
-
-    print('Performing t-SNE...')
-    X = TSNE(n_components=2, random_state=0).fit_transform(Z)
-
-    paths = ['results/' + model_name + '/figs/Z' + str(s) + '_' + str(epoch) + '.png' for s in range(nreps)]
-
-    fig, ax = plt.subplots(figsize=(12, 12))
-    plt.scatter(X[:, 0], X[:, 1])
-
-    for x0, y0, path in zip(X[pick, 0], X[pick, 1], paths):
-        ab = AnnotationBbox(OffsetImage(plt.imread(path)), (x0, y0), frameon=False)
-        ax.add_artist(ab)
-
-    plt.savefig('results/' + model_name + '/figs/global_latent_epoch_' + str(epoch) + '.pdf')
 
 
 def plot_losses(model, tr_losses, test_losses, tr_recs, test_recs, tr_kl_ls, test_kl_ls, tr_kl_gs, test_kl_gs,
@@ -255,17 +259,31 @@ if __name__ == "__main__":
 
         # Save figures
         with torch.no_grad():
-            sample_z = torch.randn(64, dim_z).to(device)
-            sample_Z = torch.randn(dim_Z).to(device)
-            sample = model.decode(sample_z, sample_Z).cpu()
-            save_image(sample.view(64, 1, 28, 28),
-                       'results/' + model_name + '/figs/sample_' + str(epoch) + '.png')
-            plt.close('all')
+
+            losses = {
+                'tr_losses': tr_losses,
+                'test_losses': test_losses,
+                'tr_recs': tr_recs,
+                'test_recs': test_recs,
+                'tr_kl_ls': tr_kl_ls,
+                'test_kl_ls': test_kl_ls,
+                'tr_kl_gs': tr_kl_gs,
+                'test_kl_gs': test_kl_gs
+            }
+            np.save('results/' + model_name + '/checkpoints/losses', losses)
             plot_losses(model, tr_losses, test_losses, tr_recs, test_recs, tr_kl_ls, test_kl_ls, tr_kl_gs, test_kl_gs,
                     model_name=model_name)
-            if np.mod(epoch, 100)==0 or epoch==1 or epoch==args.epochs:
+            if np.mod(epoch, args.save_each)==0 or epoch==1 or epoch==args.epochs:
+
+                sample_z = torch.randn(64, dim_z).to(device)
+                sample_Z = torch.randn(dim_Z).to(device)
+                sample = model._decode(sample_z, sample_Z).cpu()
+                save_image(sample,
+                           'results/' + model_name + '/figs/samples/sample_' + str(epoch) + '.png')
+                plt.close('all')
+
                 save_model(model, epoch, model_name=model_name)
-                plot_latent(model, epoch, test_loader, cuda=args.cuda, model_name=model_name)
-                plot_global_latent(model, epoch, nsamples=4, nreps=1000, nims=20, cuda=args.cuda, model_name=model_name)
+                #plot_latent(model, epoch, test_loader, cuda=args.cuda, model_name=model_name)
+                #plot_global_latent(model, epoch, nsamples=4, nreps=1000, nims=20, cuda=args.cuda, model_name=model_name)
 
 
