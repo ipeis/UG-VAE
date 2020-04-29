@@ -3,4 +3,3 @@ Code for GLVAE, a VAE framwork that aggregates both local and global latent spac
 
 <img src="figs/model.png" data-canonical-src="figs/model.png" width="200" />
 
-![](figs/model.png | width=100)
