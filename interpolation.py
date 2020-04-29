@@ -1,7 +1,6 @@
 
 
 from GLVAE import *
-from MLVAE import *
 import argparse
 from torchvision import datasets, transforms
 from torch import nn, optim
@@ -68,8 +67,6 @@ parser.add_argument('--epoch', type=int, default=10,
                     help='Epoch to load')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--model', type=str, default='glvae',
-                    help='model design (glvae or mlvae)')
 parser.add_argument('--model_name', type=str, default='trained',
                     help='name for the model to be saved')
 args = parser.parse_args()
@@ -94,10 +91,7 @@ if __name__ == "__main__":
     batch_1, _ = iter(train_loader).next()
     batch_2, _ = iter(train_loader).next()
 
-    if args.model == 'glvae':
-        model = GLVAE(channels=nchannels[args.dataset], dim_z=dim_z, dim_Z=dim_Z, arch=args.arch)
-    elif args.model == 'mlvae':
-        model = MLVAE(channels=nchannels[args.dataset], dim_z=dim_z, dim_Z=dim_Z, arch=args.arch)
+    model = GLVAE(channels=nchannels[args.dataset], dim_z=dim_z, dim_Z=dim_Z, arch=args.arch)
     state_dict = torch.load('./results/' + name + '/checkpoints/checkpoint_' + str(epoch) + '.pth',
                             map_location=torch.device('cpu'))
     model.load_state_dict(state_dict)

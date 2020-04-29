@@ -85,7 +85,7 @@ class DigitSampler(torch.utils.data.sampler.Sampler):
 
 
 class MnistSeries(Dataset):
-    def __init__(self, path='./data/', split='train', nbatches=200, batch_size=128):
+    def __init__(self, path='./data/', split='train', nbatches=200, batch_size=128, offset=0):
 
         if split=='train':
             self.nbatches = nbatches
@@ -94,19 +94,23 @@ class MnistSeries(Dataset):
         self.batch_size = batch_size
         self.length = int(256)
         even = np.arange(self.length) * 2
+        even = even + offset
         even = split_digits(even)
 
         odd = np.arange(self.length) * 2 + 1
+        odd = odd + offset
         odd = split_digits(odd)
 
         fibonacci = [0, 1]
         for i in range(2, self.length):
             fibonacci.append(fibonacci[i - 1] + fibonacci[i - 2])
+        fibonacci = np.array(fibonacci) + offset
         fibonacci = split_digits(fibonacci)
 
         primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103,
                   107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223,
                   227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283]
+        primes = np.array(primes) + offset
         primes = split_digits(primes)
 
         def isPrime(n):
@@ -156,6 +160,7 @@ class MnistSeries(Dataset):
         self.iters = [iter(self.loaders[n]) for n in range(len(self.loaders))]
         self.i_s = np.zeros(len(self.series), dtype=int)
         self.s = np.random.randint(0, len(self.series))
+        self.offset = offset
 
     def __getitem__(self, index):
 
@@ -525,7 +530,7 @@ def split_digits(int_list):
 
 ########################################################################################################################
 
-def get_data(name):
+def get_data(name, **args):
 
     if name.lower()=='celeba':
         data_tr, data_val, data_test = CelebA(path='./data/celeba/',
@@ -550,8 +555,12 @@ def get_data(name):
         data_val = None
 
     elif name.lower()=='mnist_series':
-        data_tr = MnistSeries('./data/', 'train')
-        data_test = MnistSeries('./data/', 'test')
+        if 'offset' in args.keys():
+            offset = args['offset']
+        else:
+            offset = 0
+        data_tr = MnistSeries('./data/', 'train', offset=offset)
+        data_test = MnistSeries('./data/', 'test', offset=offset)
         data_val = None
 
     elif name.lower()=='mnist_svhn_series':

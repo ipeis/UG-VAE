@@ -1,5 +1,4 @@
 from GLVAE import *
-from MLVAE import *
 import argparse
 from torchvision import datasets, transforms
 from torch import nn, optim
@@ -14,8 +13,6 @@ parser.add_argument('--dim_Z', type=int, default=10, metavar='N',
                     help='Dimensions for global latent')
 parser.add_argument('--dataset', type=str, default='celeba',
                     help='Name of the dataset')
-parser.add_argument('--model', type=str, default='glvae',
-                    help='model design (glvae or mlvae)')
 parser.add_argument('--arch', type=str, default='beta_vae',
                     help='Architecture for the model')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
@@ -97,10 +94,8 @@ dim_Z = args.dim_Z
 distribution = distributions[args.dataset]
 nchannels = nchannels[args.dataset]
 
-if args.model == 'mlvae':
-    model = MLVAE(channels=nchannels, dim_z=dim_z, dim_Z=dim_Z, arch=args.arch).to(device)
-elif args.model =='glvae':
-    model = GLVAE(channels=nchannels, dim_z=dim_z, dim_Z=dim_Z, arch=args.arch).to(device)
+
+model = GLVAE(channels=nchannels, dim_z=dim_z, dim_Z=dim_Z, arch=args.arch).to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 

@@ -14,9 +14,9 @@ from torchvision.utils import make_grid
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from torch.nn.modules.flatten import Flatten
 
-class MLVAE(nn.Module):
+class GLVAE(nn.Module):
     def __init__(self, channels, dim_z, dim_Z, arch='beta_vae'):
-        super(MLVAE, self).__init__()
+        super(GLVAE, self).__init__()
 
         self.dim_z = dim_z
         self.dim_Z = dim_Z
@@ -24,31 +24,19 @@ class MLVAE(nn.Module):
         # Architecture from beta_vae
         if arch=='beta_vae':
             # Encoder
-            self.pre_encoder = nn.Sequential(
+            self.encoder = nn.Sequential(
                 nn.Conv2d(channels, 32, 4, 2, 1),  # B,  32, 32, 32
-                nn.BatchNorm2d(32),
                 nn.ReLU(True),
                 nn.Conv2d(32, 32, 4, 2, 1),  # B,  32, 16, 16
-                nn.BatchNorm2d(32),
                 nn.ReLU(True),
                 nn.Conv2d(32, 64, 4, 2, 1),  # B,  64,  8,  8
-                nn.BatchNorm2d(64),
                 nn.ReLU(True),
                 nn.Conv2d(64, 64, 4, 2, 1),  # B,  64,  4,  4
-                nn.BatchNorm2d(64),
                 nn.ReLU(True),
                 nn.Conv2d(64, 256, 4, 1),  # B, 256,  1,  1
-                nn.BatchNorm2d(256),
                 nn.ReLU(True),
-            )
-
-            self.local_encoder = nn.Sequential(
                 View((-1, 256 * 1 * 1)),  # B, 256
                 nn.Linear(256, dim_z * 2),  # B, z_dim*2
-            )
-            self.global_encoder = nn.Sequential(
-                View((-1, 256 * 1 * 1)),  # B, 256
-                nn.Linear(256, dim_Z * 2),  # B, z_dim*2
             )
 
             self.decoder = nn.Sequential(
@@ -69,16 +57,11 @@ class MLVAE(nn.Module):
 
         # Original architecture in Kingma's VAE
         elif arch=='k_vae':
-            self.pre_encoder = nn.Sequential(
+            self.encoder = nn.Sequential(
                 View((-1, channels*784)),
                 nn.Linear(channels*784, 400),
-                nn.ReLU()
-            )
-            self.local_encoder = nn.Sequential(
+                nn.ReLU(),
                 nn.Linear(400, dim_z*2)
-            )
-            self.global_encoder = nn.Sequential(
-                nn.Linear(400, dim_Z * 2)
             )
             self.decoder = nn.Sequential(
                 nn.Linear(dim_z+dim_Z, 400),
@@ -88,31 +71,28 @@ class MLVAE(nn.Module):
                 View((-1, channels, 28, 28))
             )
 
+        self.global_encoder = nn.Sequential(
+            nn.Linear(dim_z, 256),
+            nn.ReLU(True),
+            nn.Linear(256, dim_Z * 2),
+        )
 
     def _encode(self, x):
-        h = self.pre_encoder(x)
-        mu_l, std_l = self._local_encode(h)
-        mu_g, std_g = self._global_encode(h)
-
-        return mu_l, std_l, mu_g, std_g
-
-
-    def _local_encode(self, h):
-        theta = self.local_encoder(h)
+        theta = self.encoder(x)
         mu = theta[:, :self.dim_z]
-        var = torch.exp(torch.tanh(theta[:, self.dim_z:]))
+        std = torch.exp(0.5 * theta[:, self.dim_z:] )
 
-        return mu, var
+        return mu, std
 
-
-    def _global_encode(self, h):
-        theta = self.global_encoder(h)
+    def _global_encode(self, z_batch):
+        mu = []
+        prec = []
+        theta = self.global_encoder(z_batch)
         mu = theta[:, :self.dim_Z]
-        logvar = torch.tanh(theta[:, self.dim_Z:])
-        prec = torch.exp(logvar) ** -1
+        prec = torch.exp(theta[:, self.dim_Z:]) ** -1
 
         var = (torch.sum(prec, dim=0))**-1
-        aux = torch.sum(torch.mul(prec, mu), dim=0)
+        aux = torch.sum(torch.mul(prec, mu))
         mu = torch.mul(var, aux)
 
         return mu, var
@@ -129,12 +109,12 @@ class MLVAE(nn.Module):
         return self.decoder(z_gl)
 
     def forward(self, x):
-        mu_l, var_l, mu_g, var_g = self._encode(x)
-        z = self.reparameterize(mu_l, var_l)
-        Z = self.reparameterize(mu_g, var_g)
+        mu_z, var_z = self._encode(x)
+        z = self.reparameterize(mu_z, var_z)
+        mu_Z, var_Z = self._global_encode(z)
+        Z = self.reparameterize(mu_Z, var_Z)
 
-        return self._decode(z, Z), mu_l, var_l, mu_g, var_g
-
+        return self._decode(z, Z), mu_z, var_z, mu_Z, var_Z
 
 class View(nn.Module):
     def __init__(self, size):

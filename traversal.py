@@ -1,7 +1,7 @@
 
 
+from GLVAE_old import *
 from GLVAE import *
-from MLVAE import *
 import argparse
 from torchvision import datasets, transforms
 from torch import nn, optim
