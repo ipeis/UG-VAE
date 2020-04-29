@@ -241,7 +241,8 @@ elif args.dataset == 'mnist_series':
 
     # Encode series + offset
     data_args = {
-        'offset': 5
+        #'offset': 5,
+        'scale': 5
     }
     ########################################################################################################################
     data_tr_off, _, data_test_off = get_data(args.dataset, **data_args)
@@ -327,7 +328,7 @@ elif args.dataset == 'mnist_series':
      range(len(series))]
     plt.legend(loc='best')
     plt.title('Global space')
-    plt.savefig(folder + 'global_space_' + str(args.epoch) + '_' + args.dim_reduction)
+    plt.savefig(folder + 'global_space_' + str(args.epoch) + '_ops' + '_' + args.dim_reduction)
     ########################################################################################################################
 
 elif args.dataset == 'mnist_svhn_series':

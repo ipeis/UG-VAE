@@ -23,10 +23,8 @@ class Traversal():
             os.makedirs(folder)
 
         zt = torch.linspace(-self.zmax, self.zmax, self.steps)
-        if args.model=='mlvae':
-            z, _, zg, _ = model._encode(data)
-        else:
-            z, _ = model._encode(data)
+        z, _, zg, _ = model._encode(data)
+
 
         for dim in range(z.shape[-1]):
             z_copy = z.clone().detach()
@@ -58,11 +56,9 @@ class GlobalTraversal():
         batch_grid_size = int(np.sqrt(len(batch)))
 
         Zt = torch.linspace(-self.Zmax, self.Zmax, self.steps)
-        if args.model=='mlvae':
-            z, _, zg, _ = model._encode(data)
-        elif args.model=='glvae':
-            z, _ = model._encode(data)
-            zg, _ = model._global_encode(z)
+
+        z, _ = model._encode(data)
+        zg, _ = model._global_encode(z)
         for dim in range(z.shape[-1]):
             zg_copy = zg.clone().detach()
             grid = []
@@ -96,8 +92,6 @@ parser.add_argument('--zmax', type=float, default=3, metavar='N',
                     help='[-zmax, zmax] for z range')
 parser.add_argument('--epoch', type=int, default=10,
                     help='Epoch to load')
-parser.add_argument('--model', type=str, default='glvae',
-                    help='model design (glvae or mlvae)')
 parser.add_argument('--model_name', type=str, default='trained',
                     help='name for the model to be saved')
 args = parser.parse_args()
@@ -123,10 +117,7 @@ if __name__ == "__main__":
 
     batch, _ = iter(train_loader).next()
 
-    if args.model == 'mlvae':
-        model = MLVAE(channels=nchannels[args.dataset], dim_z=dim_z, dim_Z=dim_Z, arch=args.arch)
-    elif args.model == 'glvae':
-        model = GLVAE(channels=nchannels[args.dataset], dim_z=dim_z, dim_Z=dim_Z, arch=args.arch)
+    model = GLVAE(channels=nchannels[args.dataset], dim_z=dim_z, dim_Z=dim_Z, arch=args.arch)
 
     state_dict = torch.load('./results/' + name + '/checkpoints/checkpoint_' + str(epoch) + '.pth',
                             map_location=torch.device('cpu'))

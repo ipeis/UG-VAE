@@ -20,22 +20,10 @@ class Interpolation():
         if os.path.isdir(folder) == False:
             os.makedirs(folder)
 
-        if args.model =='glvae':
-            mu_z1, var_z1 = model._encode(batch_1)
-            #z1 = self.reparameterize(mu_z1, var_z1)
-            mu_Z1, var_Z1 = model._global_encode(mu_z1)
-            mu_z1 = mu_z1[0].view(-1, mu_z1.shape[-1])
-
-            mu_z2, var_z2 = model._encode(batch_2)
-            # z1 = self.reparameterize(mu_z1, var_z1)
-            mu_Z2, var_Z2 = model._global_encode(mu_z2)
-            mu_z2 = mu_z2[0]
-
-        elif args.model == 'mlvae':
-            mu_z1, var_z1, mu_Z1, var_Z1 = model._encode(batch_1)
-            mu_z2, var_z2, mu_Z2, var_Z2 = model._encode(batch_2)
-            mu_z1 = mu_z1[0]
-            mu_z2 = mu_z2[0].view(-1, mu_z2.shape[-1])
+        mu_z1, var_z1, mu_Z1, var_Z1 = model._encode(batch_1)
+        mu_z2, var_z2, mu_Z2, var_Z2 = model._encode(batch_2)
+        mu_z1 = mu_z1[0]
+        mu_z2 = mu_z2[0].view(-1, mu_z2.shape[-1])
 
         lambda_ = torch.linspace(0, 1, self.steps)
         local_int = [l * mu_z2 + (1-l) * mu_z1 for l in lambda_]
