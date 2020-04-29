@@ -3,6 +3,7 @@ import argparse
 from torchvision import datasets, transforms
 from torch import nn, optim
 import re, sys
+from torchvision.utils import save_image
 
 
 ########################################################################################
