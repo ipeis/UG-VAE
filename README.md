@@ -1,4 +1,5 @@
 # GLVAE
 Code for GLVAE, a VAE framwork that aggregates both local and global latent spaces.
 
-![](figs/model)
+<img src="figs/model.png" data-canonical-src="figs/model.png" width="200" />
+
