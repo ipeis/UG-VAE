@@ -241,8 +241,8 @@ elif args.dataset == 'mnist_series':
 
     # Encode series + offset
     data_args = {
-        #'offset': 5,
-        'scale': 5
+        'offset': 5,
+        #'scale': 5
     }
     ########################################################################################################################
     data_tr_off, _, data_test_off = get_data(args.dataset, **data_args)
