@@ -12,7 +12,6 @@ matplotlib.use("Pdf")
 import matplotlib.pyplot as plt
 from torchvision.utils import make_grid
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-from torch.nn.modules.flatten import Flatten
 
 class GLVAE(nn.Module):
     def __init__(self, channels, dim_z, dim_Z, arch='beta_vae'):
@@ -135,39 +134,30 @@ class GLVAE(nn.Module):
 
         return self._decode(z, Z), mu_l, var_l, mu_g, var_g
 
+    # Reconstruction + KL divergence losses summed over all elements and batch
+    def loss_function(self, recon_x, x, mu, var, mu_g, var_g, beta_l=1.0, beta_g=1.0, distribution='bernoulli'):
 
-class View(nn.Module):
-    def __init__(self, size):
-        super(View, self).__init__()
-        self.size = size
+        # BCE = F.binary_cross_entropy(recon_x.view(-1, x.shape[1]*x.shape[2]*x.shape[3]),
+        #                             x.view(-1, x.shape[1]*x.shape[2]*x.shape[3]),
+        #                             reduction='sum')
+        if distribution == 'bernoulli':
+            recogn = F.binary_cross_entropy(recon_x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]),
+                                            x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]),
+                                            reduction='sum')
+        elif distribution == 'gaussian':
+            recogn = F.mse_loss(recon_x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]),
+                                x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]), reduction='sum')
 
-    def forward(self, tensor):
-        return tensor.view(self.size)
+        # see Appendix B from VAE paper:
+        # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
+        # https://arxiv.org/abs/1312.6114
+        # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+        KLD = -0.5 * torch.sum(1 + torch.log(var) - mu.pow(2) - var)
 
+        KLG = -0.5 * torch.sum(1 + torch.log(var_g) - mu_g.pow(2) - var_g)
 
-# Reconstruction + KL divergence losses summed over all elements and batch
-def loss_function(recon_x, x, mu, var, mu_g, var_g, beta_l=1.0, beta_g=1.0, distribution='bernoulli'):
+        return recogn + beta_l * KLD + beta_g * KLG, recogn, beta_l * KLD, beta_g * KLG
 
-    #BCE = F.binary_cross_entropy(recon_x.view(-1, x.shape[1]*x.shape[2]*x.shape[3]),
-    #                             x.view(-1, x.shape[1]*x.shape[2]*x.shape[3]),
-    #                             reduction='sum')
-    if distribution=='bernoulli':
-        recogn = F.binary_cross_entropy(recon_x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]),
-                                 x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]),
-                                        reduction='sum')
-    elif distribution=='gaussian':
-        recogn = F.mse_loss(recon_x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]),
-                            x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]), reduction='sum')
-
-    # see Appendix B from VAE paper:
-    # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
-    # https://arxiv.org/abs/1312.6114
-    # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-    KLD = -0.5 * torch.sum(1 + torch.log(var) - mu.pow(2) - var)
-
-    KLG = -0.5 * torch.sum(1 + torch.log(var_g) - mu_g.pow(2) - var_g)
-
-    return recogn + beta_l*KLD + beta_g*KLG, recogn, beta_l*KLD, beta_g*KLG
 
 class View(nn.Module):
     def __init__(self, size):

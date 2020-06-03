@@ -44,7 +44,7 @@ class Mnist_Svhn(Dataset):
         self.mnist= datasets.MNIST(path, train=split=='train', download=True,
                                        transform=transforms.Compose([transforms.Lambda(lambda image: image.convert('RGB')),
                                                                      transforms.ToTensor()]))
-        self.svhn = datasets.SVHN(path, split=split,
+        self.svhn = datasets.SVHN(path, split=split, download=True,
                         transform=transforms.Compose([transforms.CenterCrop(28),
                                                       transforms.ToTensor()]))
 
@@ -128,6 +128,7 @@ class MnistSeries(Dataset):
 
         #print(primes[:N]) # print result list limited to N elements
 
+        np.array(primes) * scale + offset
         primes = split_digits(primes)
 
 
@@ -140,6 +141,8 @@ class MnistSeries(Dataset):
              'values': fibonacci[:self.length]},
             {'name': 'primes',
             'values': primes[:self.length]},
+            {'name': 'random',
+             'values': np.random.randint(10, size=(self.length)) }
         ]
         self.mnist = datasets.MNIST(path, train=split=='train', download=True,
                                  transform=transforms.ToTensor())
@@ -158,7 +161,108 @@ class MnistSeries(Dataset):
                 batch_size=1)
             )
         self.iters = [iter(self.loaders[n]) for n in range(len(self.loaders))]
+        #self.i_s = np.zeros(len(self.series), dtype=int)
+        self.i_s = np.array([np.random.randint(0, len(self.series[s]['values'])) for s in range(len(self.series))], dtype=int)
+        self.s = np.random.randint(0, len(self.series))
+        self.offset = offset
+
+    def __getitem__(self, index):
+
+        # Choose a serie
+        s = torch.tensor(np.random.randint(0, len(self.series)))
+        if s == 4:
+            # Randomize again
+            self.series[4]['values'] = np.random.randint(10, size=(self.length))
+        batch = []
+        labels = []
+
+        self.i_s = np.array([np.random.randint(0, len(self.series[s]['values'])) for s in range(len(self.series))], dtype=int)
+
+        for i in range(self.batch_size):
+            index = np.mod(self.i_s[s], self.length)
+            n = self.series[s]['values'][index]  # digit
+            self.i_s[s] += 1
+            image, label = self.iters[n].next()
+            batch.append(image)
+            labels.append(label)
+
+        data = torch.cat(batch).view(-1, 28, 28)
+        labels = torch.cat(labels).view(-1, 1)
+        labels = torch.cat((labels, torch.ones([self.batch_size, 1], dtype=torch.long)*s), dim=1).view(-1, 2)
+
+        return data, labels
+
+    def __len__(self):
+        return self.nbatches
+
+    def reset(self):
+        self.loaders = []
+        samplers = []
+        ndigits = []
+        for n in range(10):
+            mask = [1 if self.mnist[i][1] == n else 0 for i in range(len(self.mnist))]
+            mask = torch.tensor(mask)
+            ndigits.append(mask.sum())
+            samplers.append(DigitSampler(mask, self.mnist))
+
+            self.loaders.append(torch.utils.data.DataLoader(
+                self.mnist,
+                sampler=samplers[-1],
+                batch_size=1)
+            )
+        self.iters = [iter(self.loaders[n]) for n in range(len(self.loaders))]
         self.i_s = np.zeros(len(self.series), dtype=int)
+
+
+class MnistSeries2(Dataset):
+    def __init__(self, path='./data/', split='train', nbatches=200, batch_size=128, offset=0, scale=1):
+
+        if split=='train':
+            self.nbatches = nbatches
+        elif split=='test':
+            self.nbatches = int(0.1*nbatches)
+        self.batch_size = batch_size
+        self.length = int(256)
+
+        series_2 = np.arange(self.length) * 2
+        series_2 = series_2*scale + offset
+        series_2 = split_digits(series_2)
+
+        series_5 = np.arange(self.length) * 5
+        series_5 = series_5 * scale + offset
+        series_5 = split_digits(series_5)
+
+        series_10 = np.arange(self.length) * 10
+        series_10 = series_10 * scale + offset
+        series_10 = split_digits(series_10)
+
+        self.series = [
+            {'name': 'series_2',
+             'values': series_2[:self.length]},
+            {'name': 'series_5',
+             'values': series_5[:self.length]},
+            {'name': 'series_10',
+             'values': series_10[:self.length]},
+        ]
+        self.mnist = datasets.MNIST(path, train=split=='train', download=True,
+                                 transform=transforms.ToTensor())
+        self.loaders = []
+        samplers = []
+        ndigits = []
+        for n in range(10):
+            mask = [1 if self.mnist[i][1] == n else 0 for i in range(len(self.mnist))]
+            mask = torch.tensor(mask)
+            ndigits.append(mask.sum())
+            samplers.append(DigitSampler(mask, self.mnist))
+
+            self.loaders.append(torch.utils.data.DataLoader(
+                self.mnist,
+                sampler=samplers[-1],
+                batch_size=1)
+            )
+        self.iters = [iter(self.loaders[n]) for n in range(len(self.loaders))]
+        #self.i_s = np.zeros(len(self.series), dtype=int)
+        self.i_s = np.array([np.random.randint(0, len(self.series[s]['values'])) for s in range(len(self.series))], dtype=int)
         self.s = np.random.randint(0, len(self.series))
         self.offset = offset
 
@@ -169,7 +273,7 @@ class MnistSeries(Dataset):
         batch = []
         labels = []
 
-        self.i_s = np.zeros(len(self.series), dtype=int)
+        self.i_s = np.array([np.random.randint(0, len(self.series[s]['values'])) for s in range(len(self.series))], dtype=int)
 
         for i in range(self.batch_size):
             index = np.mod(self.i_s[s], self.length)
@@ -351,12 +455,40 @@ class MnistSvhnSeries(Dataset):
         self.i_s = np.zeros(len(self.series), dtype=int)
 
 
+
+class Faces(Dataset):
+
+    def __init__(self, path='./data/faces/', transform=None, split='train'):
+
+        self.path = path
+        self.faces =  datasets.ImageFolder(path, transform=transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+
+
+        if split=='train':
+            self.faces = Subset(self.faces, np.arange(200))
+        elif split=='test':
+            self.faces = Subset(self.faces, np.arange(200, 265))
+        elif split=='val':
+            self.faces = Subset(self.faces, np.arange(265, 270))
+
+    def __getitem__(self, index):
+
+        image = self.faces.__getitem__(index)
+
+        return image
+
+    def __len__(self):
+        return self.faces.__len__()
+
+
 class CelebAFaces(Dataset):
 
     def __init__(self, path='./data/', split='train'):
 
         self.path = path
-        self.celeba = datasets.ImageFolder(path + 'light_celeba/', transform=transforms.Compose([
+        self.celeba = datasets.ImageFolder(path + 'celeba/', transform=transforms.Compose([
                                                   transforms.Resize((64, 64)),
                                                   transforms.ToTensor(),]))
         self.faces = datasets.ImageFolder(path + 'faces/', transform=transforms.Compose([
@@ -365,7 +497,7 @@ class CelebAFaces(Dataset):
 
 
 
-        celeba_tr_list = pd.read_csv(self.path+'light_celeba/' + 'list_eval_partition.txt', header=None).values
+        celeba_tr_list = pd.read_csv(self.path+'celeba/' + 'list_eval_partition.txt', header=None).values
         celeba_partition = np.array([int(i[0][-1]) for i in celeba_tr_list])
         self.celeba_tr_idx = np.where(celeba_partition == 0)[0]
         self.celeba_val_idx = np.where(celeba_partition == 1)[0]
@@ -403,7 +535,7 @@ class CelebAFaces(Dataset):
 
 
         #label = torch.cat([label, torch.tensor(k)])
-        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), label
+        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), k
 
     def __len__(self):
         return self.nims
@@ -420,7 +552,7 @@ class CelebAFacesBatch(Dataset):
     def __init__(self, path='./data/', split='train', batch_size=128):
 
         self.path = path
-        self.celeba = datasets.ImageFolder(path + 'light_celeba/', transform=transforms.Compose([
+        self.celeba = datasets.ImageFolder(path + 'celeba/', transform=transforms.Compose([
                                                   transforms.Resize((64, 64)),
                                                   transforms.ToTensor(),]))
         self.faces = datasets.ImageFolder(path + 'faces/', transform=transforms.Compose([
@@ -430,7 +562,7 @@ class CelebAFacesBatch(Dataset):
 
         self.batch_size = batch_size
 
-        celeba_tr_list = pd.read_csv(self.path+'light_celeba/' + 'list_eval_partition.txt', header=None).values
+        celeba_tr_list = pd.read_csv(self.path+'celeba/' + 'list_eval_partition.txt', header=None).values
         celeba_partition = np.array([int(i[0][-1]) for i in celeba_tr_list])
         self.celeba_tr_idx = np.where(celeba_partition == 0)[0]
         self.celeba_val_idx = np.where(celeba_partition == 1)[0]
@@ -497,9 +629,14 @@ nchannels = {
     'mnist': 1,
     'mnist_svhn': 3,
     'mnist_series': 1,
+    'mnist_series2': 1,
     'mnist_svhn_series': 3,
     'celeba_faces': 3,
+    'faces': 3,
     'celeba_faces_batch': 3,
+    'cifar10': 3,
+    'stl10': 3,
+    'fashion_mnist': 1,
 }
 distributions = {
     'celeba': 'gaussian',
@@ -507,9 +644,15 @@ distributions = {
     'mnist': 'bernoulli',
     'mnist_svhn': 'bernoulli',
     'mnist_series': 'bernoulli',
+    'mnist_series2': 'bernoulli',
     'mnist_svhn_series': 'bernoulli',
+    'faces': 'gaussian',
     'celeba_faces': 'gaussian',
     'celeba_faces_batch': 'gaussian',
+    'cifar10': 'gaussian',
+    'stl10': 'gaussian',
+    'fashion_mnist': 'bernoulli',
+
 }
 
 
@@ -562,11 +705,24 @@ def get_data(name, **args):
         data_tr = MnistSeries('./data/', 'train', offset=offset)
         data_test = MnistSeries('./data/', 'test', offset=offset)
         data_val = None
+    elif name.lower()=='mnist_series2':
+        if 'offset' in args.keys():
+            offset = args['offset']
+        else:
+            offset = 0
+        data_tr = MnistSeries2('./data/', 'train', offset=offset)
+        data_test = MnistSeries2('./data/', 'test', offset=offset)
+        data_val = None
 
     elif name.lower()=='mnist_svhn_series':
         data_tr = MnistSvhnSeries('./data/', 'train')
         data_test = MnistSvhnSeries('./data/', 'test')
         data_val = None
+
+    elif name.lower()=='faces':
+        data_tr = Faces('./data/faces/', 'train')
+        data_test = Faces('./data/faces/', 'test')
+        data_val = Faces('./data/faces/', 'val')
 
     elif name.lower()=='celeba_faces':
         data_tr = CelebAFaces('./data/', 'train')
@@ -577,6 +733,35 @@ def get_data(name, **args):
         data_tr = CelebAFacesBatch('./data/', 'train')
         data_test = CelebAFacesBatch('./data/', 'test')
         data_val = CelebAFacesBatch('./data/', 'val')
+
+    elif name.lower()=='cifar10':
+        data_tr = datasets.CIFAR10('../data', train=True, download=True,
+                                 transform=transforms.Compose([
+                                                  transforms.Resize((64, 64)),
+                                                  transforms.ToTensor()]))
+        data_test = datasets.CIFAR10('../data', train=False, download=True,
+                                   transform=transforms.Compose([
+                                                  transforms.Resize((64, 64)),
+                                                  transforms.ToTensor()]))
+        data_val = None
+
+    elif name.lower()=='stl10':
+        data_tr = datasets.STL10('../data', split='train', download=True,
+                                 transform=transforms.Compose([
+                                                  transforms.Resize((64, 64)),
+                                                  transforms.ToTensor()]))
+        data_test = datasets.STL10('../data', split='test', download=True,
+                                   transform=transforms.Compose([
+                                                  transforms.Resize((64, 64)),
+                                                  transforms.ToTensor()]))
+        data_val = None
+
+    elif name.lower()=='fashion_mnist':
+        data_tr = datasets.FashionMNIST('../data', train=True, download=True,
+                                        transform=transforms.ToTensor())
+        data_test = datasets.FashionMNIST('../data', train=True, download=True,
+                                   transform=transforms.ToTensor())
+        data_val = None
 
     else:
         print('Dataset not valid')
