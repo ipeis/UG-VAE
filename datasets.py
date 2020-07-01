@@ -547,6 +547,76 @@ class CelebAFaces(Dataset):
         self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
 
 
+class CelebALFW(Dataset):
+
+    def __init__(self, path='./data/', split='train'):
+
+        self.path = path
+        self.celeba = datasets.ImageFolder(path + 'celeba/', transform=transforms.Compose([
+                                                  transforms.Resize((64, 64)),
+                                                  transforms.ToTensor(),]))
+        self.lfw = datasets.ImageFolder(path + 'lfw/', transform=transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+
+
+
+        celeba_tr_list = pd.read_csv(self.path+'celeba/' + 'list_eval_partition.txt', header=None).values
+        celeba_partition = np.array([int(i[0][-1]) for i in celeba_tr_list])
+        self.celeba_tr_idx = np.where(celeba_partition == 0)[0]
+        self.celeba_val_idx = np.where(celeba_partition == 1)[0]
+        self.celeba_test_idx = np.where(celeba_partition == 2)[0]
+
+        lfw_tr_list = pd.read_csv(self.path + 'lfw/' + 'list_eval_partition.txt', header=None).values
+        lfw_partition = np.array([int(i[0][-1]) for i in lfw_tr_list])
+        self.lfw_tr_idx = np.where(lfw_partition == 0)[0]
+        self.lfw_val_idx = np.where(lfw_partition == 1)[0]
+        self.lfw_test_idx = np.where(lfw_partition == 2)[0]
+
+        if split=='train':
+            self.celeba = Subset(self.celeba, self.celeba_tr_idx)
+            self.lfw = Subset(self.lfw, self.lfw_tr_idx)
+        elif split=='test':
+            self.celeba = Subset(self.celeba, self.celeba_test_idx)
+            self.lfw = Subset(self.lfw, self.lfw_test_idx)
+        elif split=='val':
+            self.celeba = Subset(self.celeba, self.celeba_val_idx)
+            self.lfw = Subset(self.lfw, self.lfw_val_idx)
+
+
+        self.celeba_loader = iter(torch.utils.data.DataLoader(self.celeba, batch_size=1, shuffle=True))
+        self.lfw_loader = iter(torch.utils.data.DataLoader(self.lfw, batch_size=1, shuffle=True))
+
+
+        self.nims = int(0.9 * (self.celeba.__len__() + self.lfw.__len__()) )
+        self.fcount = 0
+
+    def __getitem__(self, index):
+
+        k = int(np.round(np.random.uniform(0, 1)))
+        if k == 0:
+            image, label = self.celeba_loader.next()
+        else:
+            image, label = self.lfw_loader.next()
+            self.fcount += 1
+            if self.fcount == self.lfw.__len__():
+                self.reset_lfw()
+                self.fcount=0
+
+
+        #label = torch.cat([label, torch.tensor(k)])
+        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), k
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.celeba_loader = iter(torch.utils.data.DataLoader(self.celeba, batch_size=1, shuffle=True))
+        self.lfw_loader = iter(torch.utils.data.DataLoader(self.lfw, batch_size=1, shuffle=True))
+    def reset_lfw(self):
+        self.lfw_loader = iter(torch.utils.data.DataLoader(self.lfw, batch_size=1, shuffle=True))
+
+
 class CelebAFacesBatch(Dataset):
 
     def __init__(self, path='./data/', split='train', batch_size=128):
@@ -632,6 +702,7 @@ nchannels = {
     'mnist_series2': 1,
     'mnist_svhn_series': 3,
     'celeba_faces': 3,
+    'celeba_lfw': 3,
     'faces': 3,
     'celeba_faces_batch': 3,
     'cifar10': 3,
@@ -649,6 +720,7 @@ distributions = {
     'faces': 'gaussian',
     'celeba_faces': 'gaussian',
     'celeba_faces_batch': 'gaussian',
+    'celeba_lfw': 'gaussian',
     'cifar10': 'gaussian',
     'stl10': 'gaussian',
     'fashion_mnist': 'bernoulli',
@@ -733,6 +805,11 @@ def get_data(name, **args):
         data_tr = CelebAFacesBatch('./data/', 'train')
         data_test = CelebAFacesBatch('./data/', 'test')
         data_val = CelebAFacesBatch('./data/', 'val')
+
+    elif name.lower()=='celeba_lfw':
+        data_tr = CelebALFW('./data/', 'train')
+        data_test = CelebALFW('./data/', 'test')
+        data_val = CelebALFW('./data/', 'val')
 
     elif name.lower()=='cifar10':
         data_tr = datasets.CIFAR10('../data', train=True, download=True,
