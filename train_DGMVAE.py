@@ -7,22 +7,22 @@ from torchvision.utils import save_image
 from torch.distributions import MultivariateNormal as Normal
 
 ########################################################################################################################
-parser = argparse.ArgumentParser(description='Train GGMVAE')
-parser.add_argument('--dim_z', type=int, default=20, metavar='N',
+parser = argparse.ArgumentParser(description='Train DGMVAE')
+parser.add_argument('--dim_z', type=int, default=10, metavar='N',
                     help='Dimensions for local latent')
-parser.add_argument('--L', type=int, default=20, metavar='N',
+parser.add_argument('--L', type=int, default=10, metavar='N',
                     help='Number of components for the Gaussian Local mixture')
-parser.add_argument('--dim_beta', type=int, default=20, metavar='N',
+parser.add_argument('--dim_beta', type=int, default=10, metavar='N',
                     help='Dimensions for global latent')
-parser.add_argument('--K', type=int, default=10, metavar='N',
+parser.add_argument('--K', type=int, default=5, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
-parser.add_argument('--dim_w', type=int, default=50, metavar='N',
+parser.add_argument('--dim_w', type=int, default=20, metavar='N',
                     help='Dimensions for global noise')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
-parser.add_argument('--dataset', type=str, default='celeba',
+parser.add_argument('--dataset', type=str, default='mnist_series',
                     help='Name of the dataset')
-parser.add_argument('--arch', type=str, default='beta_vae',
+parser.add_argument('--arch', type=str, default='k_vae',
                     help='Architecture for the model')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
@@ -36,7 +36,7 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--model_name', type=str, default='DGMVAE/celeba',
+parser.add_argument('--model_name', type=str, default='DGMVAE/mnist_series2',
                     help='name for the model to be saved')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -314,8 +314,6 @@ if __name__ == "__main__":
                 for l in range(model.L):
                     mus_z = torch.stack([theta[k][0][l, :] for k in range(model.K)])
                     vars_z = torch.stack([theta[k][1][l, :] for k in range(model.K)])
-
-
                     samples_z = torch.stack(
                         [ torch.stack( [Normal(mus_z[k], torch.diag(vars_z[k])).sample().to(device) for i
                         in range(10)])

@@ -1823,10 +1823,6 @@ class GGMVAE5(nn.Module):
         KLbeta = -0.5 * torch.sum(1 + torch.log(var_beta) - mu_beta.pow(2) - var_beta)
 
         KLd = torch.sum(pi*(torch.log(pi.double()).float()+ torch.log(torch.tensor(self.L, dtype=torch.float).to(self.device)) ))
-        if torch.isnan(KLd):
-            print(pi)
-            print('Error')
-
 
         # To maximize ELBO we minimize loss (-ELBO)
         return -logp + KLz + KLd + KLbeta, -logp, KLz, KLd, KLbeta
@@ -2003,9 +1999,7 @@ class DGMVAE(nn.Module):
 
         return self.decoder(input_decoder)
 
-    def forward(self, x):
-
-        # Encode
+    def _encode(self, x):
         h = self.pre_encoder(x)
         mu_z, var_z = self._encode_z(h)
         z = self.reparameterize(mu_z, var_z)
@@ -2019,9 +2013,13 @@ class DGMVAE(nn.Module):
         mus_z = [thetas[k][0] for k in range(self.K)]
         vars_z = [thetas[k][1] for k in range(self.K)]
 
+        return mu_z, var_z, z, pi_d, mu_w, var_w, pi_alpha, w, mus_beta, vars_beta, betas, mus_z, vars_z
+
+    def forward(self, x):
+        # Encode
+        mu_z, var_z, z, pi_d, mu_w, var_w, pi_alpha, w, mus_beta, vars_beta, betas, mus_z, vars_z = self._encode(x)
         # Decode
         mus_x = [self._decode(z, beta) for beta in betas]
-
         return mus_x, mu_z, var_z, mus_z, vars_z, pi_d, mu_w, var_w, mus_beta, vars_beta, pi_alpha
 
 

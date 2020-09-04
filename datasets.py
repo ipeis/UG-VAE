@@ -140,10 +140,12 @@ class MnistSeries(Dataset):
             {'name': 'fibonacci',
              'values': fibonacci[:self.length]},
             {'name': 'primes',
-            'values': primes[:self.length]},
-            {'name': 'random',
-             'values': np.random.randint(10, size=(self.length)) }
-        ]
+            'values': primes[:self.length]}
+           ]
+        """
+        {'name': 'random',
+         'values': np.random.randint(10, size=(self.length)) }
+        """
         self.mnist = datasets.MNIST(path, train=split=='train', download=True,
                                  transform=transforms.ToTensor())
         self.loaders = []
@@ -170,9 +172,12 @@ class MnistSeries(Dataset):
 
         # Choose a serie
         s = torch.tensor(np.random.randint(0, len(self.series)))
+        """
         if s == 4:
             # Randomize again
             self.series[4]['values'] = np.random.randint(10, size=(self.length))
+        """
+
         batch = []
         labels = []
 
@@ -689,6 +694,102 @@ class CelebAFacesBatch(Dataset):
 
 
 
+class MnistSvhnBatch(Dataset):
+
+    def __init__(self, path='./data/', split='train', batch_size=128):
+
+        self.path = path
+        self.mnist= datasets.MNIST(path, train=split=='train', download=True,
+                                       transform=transforms.Compose([transforms.Lambda(lambda image: image.convert('RGB')),
+                                                                     transforms.ToTensor()]))
+        self.svhn = datasets.SVHN(path, split=split, download=True,
+                        transform=transforms.Compose([transforms.CenterCrop(28),
+                                                      transforms.ToTensor()]))
+
+        self.mnist_loader = iter(torch.utils.data.DataLoader( self.mnist, batch_size=1, shuffle=True))
+        self.svhn_loader = iter(torch.utils.data.DataLoader( self.svhn, batch_size=1, shuffle=True))
+
+        self.batch_size = batch_size
+
+        self.nims = int(0.9 * (self.mnist.__len__() + self.svhn.__len__()) )
+
+        self.count = 0
+        self.k = int(np.round(np.random.uniform(0, 1)))
+        self.fcount=0
+
+    def __getitem__(self, index):
+        if self.k == 0:
+            image, label = self.mnist_loader.next()
+        else:
+            image, label = self.svhn_loader.next()
+
+        self.count += 1
+        if self.count == self.batch_size:
+            self.count = 0
+            self.k = int(np.round(np.random.uniform(0, 1)))
+
+        label = self.k
+
+        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), label
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.mnist_loader = iter(torch.utils.data.DataLoader(self.mnist, batch_size=1, shuffle=True))
+        self.svhn_loader = iter(torch.utils.data.DataLoader(self.svhn, batch_size=1, shuffle=True))
+    def reset_svhn(self):
+        self.svhn_loader = iter(torch.utils.data.DataLoader(self.svhn, batch_size=1, shuffle=True))
+
+
+
+class MnistUspsBatch(Dataset):
+
+    def __init__(self, path='./data/', split='train', batch_size=128):
+
+        self.path = path
+        self.mnist= datasets.MNIST(path, train=split=='train', download=True,
+                                       transform=transforms.ToTensor())
+        self.usps = datasets.USPS(path, train=split=='train', download=True,
+                                       transform=transforms.ToTensor())
+
+        self.mnist_loader = iter(torch.utils.data.DataLoader( self.mnist, batch_size=1, shuffle=True))
+        self.usps_loader = iter(torch.utils.data.DataLoader( self.usps, batch_size=1, shuffle=True))
+
+        self.batch_size = batch_size
+
+        self.nims = int(0.9 * (self.mnist.__len__() + self.usps.__len__()) )
+
+        self.count = 0
+        self.k = int(np.round(np.random.uniform(0, 1)))
+        self.fcount=0
+
+    def __getitem__(self, index):
+        if self.k == 0:
+            image, label = self.mnist_loader.next()
+        else:
+            image, label = self.usps_loader.next()
+
+        self.count += 1
+        if self.count == self.batch_size:
+            self.count = 0
+            self.k = int(np.round(np.random.uniform(0, 1)))
+
+        label = self.k
+
+        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), label
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.mnist_loader = iter(torch.utils.data.DataLoader(self.mnist, batch_size=1, shuffle=True))
+        self.usps_loader = iter(torch.utils.data.DataLoader(self.usps, batch_size=1, shuffle=True))
+    def reset_usps(self):
+        self.usps_loader = iter(torch.utils.data.DataLoader(self.usps, batch_size=1, shuffle=True))
+
+
+
 
 ########################################################################################################################
 
@@ -698,6 +799,8 @@ nchannels = {
     'light_celeba': 3,
     'mnist': 1,
     'mnist_svhn': 3,
+    'mnist_svhn_batch': 3,
+    'mnist_usps_batch': 3,
     'mnist_series': 1,
     'mnist_series2': 1,
     'mnist_svhn_series': 3,
@@ -712,8 +815,10 @@ nchannels = {
 distributions = {
     'celeba': 'gaussian',
     'light_celeba': 'gaussian',
-    'mnist': 'bernoulli',
-    'mnist_svhn': 'bernoulli',
+    'mnist': 'gaussian',
+    'mnist_svhn': 'gaussian',
+    'mnist_svhn_batch': 'gaussian',
+    'mnist_usps_batch': 'gaussian',
     'mnist_series': 'bernoulli',
     'mnist_series2': 'bernoulli',
     'mnist_svhn_series': 'bernoulli',
@@ -768,6 +873,17 @@ def get_data(name, **args):
         data_tr = Mnist_Svhn('./data/', 'train')
         data_test = Mnist_Svhn('./data/', 'test')
         data_val = None
+
+    elif name.lower()=='mnist_svhn_batch':
+        data_tr = MnistSvhnBatch('./data/', 'train')
+        data_test = MnistSvhnBatch('./data/', 'test')
+        data_val =None
+
+    elif name.lower()=='mnist_usps_batch':
+        data_tr = MnistUspsBatch('./data/', 'train')
+        data_test = MnistUspsBatch('./data/', 'test')
+        data_val =None
+
 
     elif name.lower()=='mnist_series':
         if 'offset' in args.keys():
