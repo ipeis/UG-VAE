@@ -16,8 +16,10 @@ parser.add_argument('--L', type=int, default=20, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
-parser.add_argument('--S', type=int, default=10, metavar='S',
-                    help='Number of samples for MC approx')
+parser.add_argument('--Sz', type=int, default=10, metavar='Sz',
+                    help='Number of z samples for MC approx')
+parser.add_argument('--Siwae', type=int, default=1, metavar='Siwae',
+                    help='Number of repetitions for IWAE approx (Siwae=1 --> Standard ELBO)')
 parser.add_argument('--dataset', type=str, default='mnist',
                     help='Name of the dataset')
 parser.add_argument('--arch', type=str, default='k_vae',
@@ -34,7 +36,7 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--model_name', type=str, default='GGMVAE5/prueba',
+parser.add_argument('--model_name', type=str, default='GGMVAE6/prueba',
                     help='name for the model to be saved')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -131,8 +133,11 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
     for batch_idx, (data, _) in enumerate(train_loader):
         data = data.to(device).view(-1, nchannels, data.shape[-2], data.shape[-1])
         optimizer.zero_grad()
-        mu_x, mu_z, var_z, mus_z, vars_z, mu_beta, var_beta, pi = model(data, S=args.S)
-        loss, rec, klz, kld, klbeta = model.loss_function(data, mu_x, mu_z, var_z, mus_z, vars_z, mu_beta, var_beta, pi)
+        mu_x, mu_z, var_z, mus_z, vars_z, mu_beta, var_beta, pi = model(data, Sz=args.Sz, Siwae=args.Siwae)
+        loss_, rec, klz, kld, klbeta = model.loss_function(data, mu_x, mu_z, var_z, mus_z, vars_z, mu_beta, var_beta, pi)
+        loss = -model.elbo_iwae(data, mu_x, mu_z, var_z, mus_z, vars_z, mu_beta, var_beta, pi)
+
+
         loss.backward()
         train_loss += loss.item()
         train_rec += rec.item()
@@ -145,6 +150,7 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
                 epoch, batch_idx * len(data), nims,
                        100. * batch_idx / len(train_loader),
                        loss.item() / len(data)))
+            # print(print(loss_.item() / len(data))) # ELBO
 
     print('====> Epoch: {} Average loss: {:.4f}'.format(
         epoch, train_loss / nims))
@@ -185,7 +191,7 @@ def test(model, epoch, test_loader, cuda=False, model_name='model'):
             if i == 0 and (np.mod(epoch, args.save_each)==0 or epoch==1 or epoch==args.epochs):
                 n = min(data.size(0), 8)
                 comparison = torch.cat([data[:n],
-                                        mu_x[:n]])
+                                        mu_x.view(data.shape)[:n]])
                 save_image(comparison.cpu(),
                            'results/' + model_name + '/figs/reconstructions/reconstruction_' + str(epoch) + '.png', nrow=n)
 
@@ -304,13 +310,16 @@ if __name__ == "__main__":
                         model_name=model_name)
             if np.mod(epoch, args.save_each)==0 or epoch==1 or epoch==args.epochs:
 
-                sample_beta = torch.randn(dim_beta).to(device)
+                sample_beta = torch.randn(dim_beta).to(device).view(1, 1, -1)
                 mus_z, vars_z = model._z_prior(sample_beta)
+                mus_z = mus_z.squeeze()
+                vars_z = vars_z.squeeze()
                 samples_z = torch.stack([torch.stack(
                     [Normal(mu_z, torch.diag(var_z)).sample().to(device) for mu_z, var_z in zip(mus_z, vars_z)]) for i
                     in range(64)])  # [64, K, dim_z]
-                samples = [model._decode(samples_z[:, l], sample_beta ) for l in range(L)]
-                [save_image(samples[l],
+                samples_z = samples_z.unsqueeze(0).unsqueeze(0)
+                samples = [model._decode(samples_z[:, :, :, l], sample_beta ) for l in range(L)]
+                [save_image(samples[l].squeeze(0).squeeze(0),
                             'results/' + model_name + '/figs/samples/sample_' + str(epoch) + '_L' + str(l) + '.png') for
                  l in range(L)]
                 plt.close('all')
