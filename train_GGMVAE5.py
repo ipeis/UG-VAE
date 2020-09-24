@@ -8,15 +8,15 @@ from torch.distributions import MultivariateNormal as Normal
 
 ########################################################################################################################
 parser = argparse.ArgumentParser(description='Train GGMVAE')
-parser.add_argument('--dim_z', type=int, default=10, metavar='N',
+parser.add_argument('--dim_z', type=int, default=20, metavar='N',
                     help='Dimensions for local latent')
-parser.add_argument('--dim_beta', type=int, default=10, metavar='N',
+parser.add_argument('--dim_beta', type=int, default=40, metavar='N',
                     help='Dimensions for global latent')
-parser.add_argument('--L', type=int, default=20, metavar='N',
+parser.add_argument('--L', type=int, default=10, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
-parser.add_argument('--dataset', type=str, default='mnist_usps_batch',
+parser.add_argument('--dataset', type=str, default='mnist_usps',
                     help='Name of the dataset')
 parser.add_argument('--arch', type=str, default='k_vae',
                     help='Architecture for the model')
@@ -32,7 +32,7 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--model_name', type=str, default='GGMVAE5/mnist_usps_batch',
+parser.add_argument('--model_name', type=str, default='GGMVAE5/mnist_usps',
                     help='name for the model to be saved')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()

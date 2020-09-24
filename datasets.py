@@ -72,6 +72,42 @@ class Mnist_Svhn(Dataset):
         self.svhn_loader = iter(torch.utils.data.DataLoader(self.svhn, batch_size=1, shuffle=True))
 
 
+
+class Mnist_Usps(Dataset):
+
+    def __init__(self, path='./data/', split='train'):
+
+        self.path = path
+        self.mnist= datasets.MNIST(path, train=split=='train', download=True,
+                                       transform= transforms.ToTensor())
+        self.usps = datasets.USPS(path, train=split=='train', download=True,
+                        transform=transforms.ToTensor())
+
+        self.mnist_loader = iter(torch.utils.data.DataLoader( self.mnist, batch_size=1, shuffle=True))
+        self.usps_loader = iter(torch.utils.data.DataLoader( self.usps, batch_size=1, shuffle=True))
+
+        self.nims = int(0.9 * (self.mnist.__len__() + self.usps.__len__()) )
+
+    def __getitem__(self, index):
+
+        k = int(np.round(np.random.uniform(0, 1)))
+        if k == 0:
+            image, label = self.mnist_loader.next()
+        else:
+            image, label = self.usps_loader.next()
+
+        label = torch.cat([label, torch.tensor([k])])
+        return image.view(3, 28, 28), label
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.mnist_loader = iter(torch.utils.data.DataLoader(self.mnist, batch_size=1, shuffle=True))
+        self.usps_loader = iter(torch.utils.data.DataLoader(self.usps, batch_size=1, shuffle=True))
+
+
+
 class DigitSampler(torch.utils.data.sampler.Sampler):
     def __init__(self, mask, data_source):
         self.mask = mask
@@ -701,10 +737,12 @@ class MnistSvhnBatch(Dataset):
         self.path = path
         self.mnist= datasets.MNIST(path, train=split=='train', download=True,
                                        transform=transforms.Compose([transforms.Lambda(lambda image: image.convert('RGB')),
-                                                                     transforms.ToTensor()]))
+                                                                     transforms.ToTensor(),
+                                                                     transforms.Normalize(mean=[0, 0, 0], std=[1, 1, 1])]))
         self.svhn = datasets.SVHN(path, split=split, download=True,
                         transform=transforms.Compose([transforms.CenterCrop(28),
-                                                      transforms.ToTensor()]))
+                                                      transforms.ToTensor(),
+                                                      transforms.Normalize(mean=[0, 0, 0], std=[1, 1, 1])]))
 
         self.mnist_loader = iter(torch.utils.data.DataLoader( self.mnist, batch_size=1, shuffle=True))
         self.svhn_loader = iter(torch.utils.data.DataLoader( self.svhn, batch_size=1, shuffle=True))
@@ -800,6 +838,7 @@ nchannels = {
     'mnist': 1,
     'mnist_svhn': 3,
     'mnist_svhn_batch': 3,
+    'mnist_usps': 1,
     'mnist_usps_batch': 3,
     'mnist_series': 1,
     'mnist_series2': 1,
@@ -818,6 +857,7 @@ distributions = {
     'mnist': 'gaussian',
     'mnist_svhn': 'gaussian',
     'mnist_svhn_batch': 'gaussian',
+    'mnist_usps': 'gaussian',
     'mnist_usps_batch': 'gaussian',
     'mnist_series': 'bernoulli',
     'mnist_series2': 'bernoulli',
@@ -872,6 +912,11 @@ def get_data(name, **args):
     elif name.lower()=='mnist_svhn':
         data_tr = Mnist_Svhn('./data/', 'train')
         data_test = Mnist_Svhn('./data/', 'test')
+        data_val = None
+
+    elif name.lower()=='mnist_usps':
+        data_tr = Mnist_Usps('./data/', 'train')
+        data_test = Mnist_Usps('./data/', 'test')
         data_val = None
 
     elif name.lower()=='mnist_svhn_batch':

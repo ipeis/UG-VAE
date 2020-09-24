@@ -1764,19 +1764,17 @@ class GGMVAE5(nn.Module):
 
         return self.decoder(input_decoder)
 
-    def forward(self, x, S=1):
+    def forward(self, x):
         # S1 are repetitions for ELBO and S2 for IWAE ELBO
 
         # Encode
-        h = self.pre_encoder(x)                                         # [batch, dim_h]
-        mu_z, var_z = self._encode_z(h)                                 # [batch, dim_z]
-        mu_z = mu_z.repeat([S, S, 1, 1])                                # [S_iwae, S_z, batch, dim_z]
-        var_z = var_z.repeat([S, S, 1, 1])                              # [S_iwae, S_z, batch, dim_z]
-        z = self.reparameterize(mu_z, var_z)                            # [S_iwae, S_z, batch, dim_z]
-        pi = self._encode_d(z)                                          # [S_iwae, S_z, batch, dim_d]
-        mu_beta, var_beta = self._encode_beta(h.repeat([S, S, 1, 1]), pi)     # [S_iwae, S_z, dim_beta]
-        beta = self.reparameterize(mu_beta, var_beta)                   # [S_iwae, S_z, dim_beta]
-        mus_z, vars_z = self._z_prior(beta)                             # [S_iwae, S_z, L, dim_z]
+        h = self.pre_encoder(x)
+        mu_z, var_z = self._encode_z(h)
+        z = self.reparameterize(mu_z, var_z)
+        pi = self._encode_d(z)
+        mu_beta, var_beta = self._encode_beta(h, pi)
+        beta = self.reparameterize(mu_beta, var_beta)
+        mus_z, vars_z = self._z_prior(beta)
 
         # Decode
         mu_x = self._decode(z, beta)                                    # [S_iwae, S_z, batch, dim_x]
