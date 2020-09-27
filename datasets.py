@@ -43,10 +43,12 @@ class Mnist_Svhn(Dataset):
         self.path = path
         self.mnist= datasets.MNIST(path, train=split=='train', download=True,
                                        transform=transforms.Compose([transforms.Lambda(lambda image: image.convert('RGB')),
-                                                                     transforms.ToTensor()]))
+                                                                     transforms.Resize(32),
+                                                                     transforms.ToTensor(),
+                                                                     transforms.Normalize([0, 0, 0], [1, 1, 1])]))
         self.svhn = datasets.SVHN(path, split=split, download=True,
-                        transform=transforms.Compose([transforms.CenterCrop(28),
-                                                      transforms.ToTensor()]))
+                        transform= transforms.Compose([transforms.ToTensor(),
+                                                       transforms.Normalize([0, 0, 0], [1, 1, 1])]))
 
         self.mnist_loader = iter(torch.utils.data.DataLoader( self.mnist, batch_size=1, shuffle=True))
         self.svhn_loader = iter(torch.utils.data.DataLoader( self.svhn, batch_size=1, shuffle=True))
@@ -62,7 +64,7 @@ class Mnist_Svhn(Dataset):
             image, label = self.svhn_loader.next()
 
         label = torch.cat([label, torch.tensor([k])])
-        return image.view(3, 28, 28), label
+        return image.view(3, 32, 32), label
 
     def __len__(self):
         return self.nims
@@ -97,7 +99,8 @@ class Mnist_Usps(Dataset):
             image, label = self.usps_loader.next()
 
         label = torch.cat([label, torch.tensor([k])])
-        return image.view(3, 28, 28), label
+        print(image.shape)
+        return image.view(1, 28, 28), label
 
     def __len__(self):
         return self.nims
@@ -712,7 +715,8 @@ class CelebAFacesBatch(Dataset):
         self.count += 1
         if self.count == self.batch_size:
             self.count = 0
-            self.k = int(np.round(np.random.uniform(0, 1)))
+            #self.k = int(np.round(np.random.uniform(0, 1)))
+            self.k = 0 if self.k==1 else 1
 
         label = self.k
 
@@ -735,14 +739,14 @@ class MnistSvhnBatch(Dataset):
     def __init__(self, path='./data/', split='train', batch_size=128):
 
         self.path = path
-        self.mnist= datasets.MNIST(path, train=split=='train', download=True,
-                                       transform=transforms.Compose([transforms.Lambda(lambda image: image.convert('RGB')),
-                                                                     transforms.ToTensor(),
-                                                                     transforms.Normalize(mean=[0, 0, 0], std=[1, 1, 1])]))
+        self.mnist = datasets.MNIST(path, train=split == 'train', download=True,
+                                    transform=transforms.Compose([transforms.Lambda(lambda image: image.convert('RGB')),
+                                                                  transforms.Resize(32),
+                                                                  transforms.ToTensor(),
+                                                                  transforms.Normalize([0, 0, 0], [1, 1, 1])]))
         self.svhn = datasets.SVHN(path, split=split, download=True,
-                        transform=transforms.Compose([transforms.CenterCrop(28),
-                                                      transforms.ToTensor(),
-                                                      transforms.Normalize(mean=[0, 0, 0], std=[1, 1, 1])]))
+                                  transform=transforms.Compose([transforms.ToTensor(),
+                                                                transforms.Normalize([0, 0, 0], [1, 1, 1])]))
 
         self.mnist_loader = iter(torch.utils.data.DataLoader( self.mnist, batch_size=1, shuffle=True))
         self.svhn_loader = iter(torch.utils.data.DataLoader( self.svhn, batch_size=1, shuffle=True))
@@ -768,7 +772,7 @@ class MnistSvhnBatch(Dataset):
 
         label = self.k
 
-        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), label
+        return image.view(3, 32, 32), label
 
     def __len__(self):
         return self.nims
@@ -827,6 +831,38 @@ class MnistUspsBatch(Dataset):
         self.usps_loader = iter(torch.utils.data.DataLoader(self.usps, batch_size=1, shuffle=True))
 
 
+class CelebAttribute(Dataset):
+
+    def __init__(self, path='./data/', split='train', attr = 0):
+
+        self.celeba = datasets.ImageFolder(path, transform=transforms.Compose([
+                                                  transforms.Resize((64, 64)),
+                                                  transforms.ToTensor(),]))
+
+        self.labels = pd.read_csv(path + 'list_attr_celeba.txt', sep='\s+', engine='python', header=1).values
+        self.labels_keys = pd.read_csv(path + 'list_attr_celeba.txt', sep='\s+', engine='python',
+                                       header=1).keys().values
+
+        mask = torch.tensor( [1 if self.labels[i][attr] == 1 else 0 for i in range(len(self.celeba))] )
+        self.nsamples = mask.sum()
+        self.sampler = DigitSampler(mask, self.celeba)
+        self.loader = torch.utils.data.DataLoader(
+                self.celeba,
+                sampler=self.sampler,
+                batch_size=1)
+        self.iter = iter(self.loader)
+
+
+    def __getitem__(self, index):
+
+        image, label = self.iter.next()
+
+        return image, label
+
+    def __len__(self):
+        return self.nsamples
+
+
 
 
 ########################################################################################################################
@@ -850,6 +886,7 @@ nchannels = {
     'cifar10': 3,
     'stl10': 3,
     'fashion_mnist': 1,
+    'celeba_attribute': 3,
 }
 distributions = {
     'celeba': 'gaussian',
@@ -865,6 +902,7 @@ distributions = {
     'faces': 'gaussian',
     'celeba_faces': 'gaussian',
     'celeba_faces_batch': 'gaussian',
+    'celeba_attribute': 'gaussian',
     'celeba_lfw': 'gaussian',
     'cifar10': 'gaussian',
     'stl10': 'gaussian',
@@ -999,6 +1037,11 @@ def get_data(name, **args):
                                         transform=transforms.ToTensor())
         data_test = datasets.FashionMNIST('../data', train=True, download=True,
                                    transform=transforms.ToTensor())
+        data_val = None
+
+    elif name.lower()=='celeba_attribute':
+        data_tr = CelebAttribute(path='./data/celeba/', attr=args['attr'], split='train')
+        data_test = None
         data_val = None
 
     else:

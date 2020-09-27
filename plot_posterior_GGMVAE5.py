@@ -3,6 +3,9 @@ from datasets import *
 from models import *
 import argparse
 from sklearn.decomposition import KernelPCA
+from torchvision.utils import save_image
+from sklearn import metrics
+from sklearn import mixture
 
 ########################################################################################################################
 parser = argparse.ArgumentParser(description='Plot q(z|x)')
@@ -28,7 +31,7 @@ parser.add_argument('--attribute', type=str, default='',
                     help='Attribute to plot (default None)')
 parser.add_argument('--dim_reduction', type=str, default='tsne',
                     help='Dimensionality reduction to apply (default tsne)')
-parser.add_argument('--model_name', type=str, default='GGMVAE5/mnist_series',
+parser.add_argument('--model_name', type=str, default='GGMVAE5/mnist',
                     help='name for the model to be saved')
 args = parser.parse_args()
 
@@ -52,6 +55,12 @@ state_dict = torch.load('results/' + args.model_name + '/checkpoints/checkpoint_
                         map_location=torch.device('cpu'))
 model.load_state_dict(state_dict)
 
+
+folder = 'results/' + args.model_name + '/figs/posterior/epoch_' + str(args.epoch) + '/'
+if os.path.isdir(folder) == False:
+    os.makedirs(folder)
+
+
 iterator = iter(train_loader)
 
 mu_l = []
@@ -63,6 +72,8 @@ pis = []
 for i in range(args.global_points):
 
     batch, labels = iterator.next()
+    if labels[0, 0, -1]==0:
+        save_image(batch.squeeze()[:5].unsqueeze(1), folder + 'samples_' + str(data_tr.series[labels[0, 0, -1]]['name']) + '.pdf', nrow=5)
 
     labels_l.append(labels.view(-1, labels.shape[-1]))
 
@@ -104,9 +115,7 @@ elif args.dim_reduction == 'kpca':
     kpca_g = KernelPCA(n_components=2, kernel='linear')
     X_g = kpca_g.fit_transform(mu_g)
 
-folder = 'results/' + args.model_name + '/figs/posterior/epoch_' + str(args.epoch) + '/'
-if os.path.isdir(folder) == False:
-    os.makedirs(folder)
+
 
 if args.dataset == 'celeba' or args.dataset == 'light_celeba':
     ########################################################################################################################
@@ -273,6 +282,24 @@ elif args.dataset == 'mnist_series':
     plt.savefig(folder + 'local_space_' + str(args.epoch) + '_' + args.dim_reduction)
     ########################################################################################################################
 
+    ########################################################################################################################
+    # Clustering performance in series
+
+    # Adjust a GMM to the global space
+
+    gmm = mixture.GaussianMixture(n_components=len(data_tr.series), covariance_type='full')
+
+    # Clustering score in the groups
+    map_attr = mu_g
+    gmm.fit(map_attr)
+    p = gmm.predict_proba(map_attr)
+    groups_pred = np.argmax(p, axis=1)
+    groups = labels_g
+    score_attr = metrics.silhouette_score(map_attr, groups_pred, metric='euclidean')
+    print('Clustering score on attributes: ' + str(score_attr))
+
+
+
     mu_g_series = mu_g.copy()
     var_g_series = var_g.copy()
     labels_g_series = labels_g.copy()
@@ -307,6 +334,16 @@ elif args.dataset == 'mnist_series':
 
     mu_g_all = np.concatenate((mu_g, mu_g_series), axis=0)
 
+    # Clustering score in the random batches
+    # score_rnd = metrics.adjusted_rand_score(groups_pred, groups)
+    map_rnd = mu_g[:args.global_points]
+    gmm.fit(map_rnd)
+    p = gmm.predict_proba(map_rnd)
+    groups_pred = np.argmax(p, axis=1)
+    score_rnd = metrics.silhouette_score(map_rnd, groups_pred, metric='euclidean')
+    print('Clustering score on random batches: ' + str(score_rnd))
+
+
     ########################################################################################################################
     if args.dim_reduction == 'tsne':
         print('Performing t-SNE...')
@@ -326,13 +363,13 @@ elif args.dataset == 'mnist_series':
     import matplotlib.patches as mpatches
     colors = 'r', 'g', 'b', 'c', 'm', 'y', 'k', 'pink', 'orange', 'purple'
 
-    fig, ax = plt.subplots(figsize=(5, 5))
-    plt.scatter(X_g_mix[:, 0], X_g_mix[:, 1], color='grey', alpha=0.5, label='random')
+    fig, ax = plt.subplots(figsize=(6, 6))
+    plt.plot(X_g_mix[:, 0], X_g_mix[:, 1], '.', color=(27/256, 46/256, 104/256), alpha=0.8, label='random')
 
 
     idxs = [np.where(labels_g_series == s) for s in range(len(series))]
 
-    [plt.scatter(X_g_series[idxs[s], 0], X_g_series[idxs[s], 1],  alpha=0.5, label=series[s]['name']) for s in
+    [plt.scatter(X_g_series[idxs[s], 0], X_g_series[idxs[s], 1],  alpha=0.7, label=series[s]['name']) for s in
      range(len(series))]
     plt.gca().set_prop_cycle(None)
 

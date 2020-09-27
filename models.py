@@ -1690,6 +1690,36 @@ class GGMVAE5(nn.Module):
                 View((-1, channels, 28, 28))
             )
 
+        elif arch == 'CNN_svhn': # from https://www.kaggle.com/sdelecourt/cnn-with-pytorch-for-mnist
+            # Encoder
+            self.pre_encoder = nn.Sequential(
+                nn.Conv2d(channels, 32, 4, 2, 1),  # B,  32, 16, 16
+                nn.BatchNorm2d(32),
+                nn.ReLU(True),
+                nn.Conv2d(32, 64, 4, 2, 1),  # B,  64,  8,  8
+                nn.BatchNorm2d(64),
+                nn.ReLU(True),
+                nn.Conv2d(64, 64, 4, 2, 1),  # B,  64,  4,  4
+                nn.BatchNorm2d(64),
+                nn.ReLU(True),
+                nn.Conv2d(64, 256, 4, 1),  # B, 256,  1,  1
+                nn.BatchNorm2d(256),
+                nn.ReLU(True),
+            )
+            self.decoder = nn.Sequential(
+                nn.Linear(dim_z + dim_beta, 256),  # B, 256
+                View((-1, 256, 1, 1)),  # B, 256,  1,  1
+                nn.ReLU(True),
+                nn.ConvTranspose2d(256, 64, 4),  # B,  64,  4,  4
+                nn.ReLU(True),
+                nn.ConvTranspose2d(64, 64, 4, 2, 1),  # B,  64,  8,  8
+                nn.ReLU(True),
+                nn.ConvTranspose2d(64, 32, 4, 2, 1),  # B,  32, 16, 16
+                nn.ReLU(True),
+                nn.ConvTranspose2d(32, channels, 4, 2, 1),  # B, nc, 64, 64
+                nn.Sigmoid()
+            )
+
         self.encoder_z = nn.Sequential(
             View((-1, 256)),  # B, 256
             nn.Linear(256, dim_z * 2),  # B, dim_z*2
@@ -1765,8 +1795,6 @@ class GGMVAE5(nn.Module):
         return self.decoder(input_decoder)
 
     def forward(self, x):
-        # S1 are repetitions for ELBO and S2 for IWAE ELBO
-
         # Encode
         h = self.pre_encoder(x)
         mu_z, var_z = self._encode_z(h)
@@ -1777,7 +1805,9 @@ class GGMVAE5(nn.Module):
         mus_z, vars_z = self._z_prior(beta)
 
         # Decode
-        mu_x = self._decode(z, beta)                                    # [S_iwae, S_z, batch, dim_x]
+        mu_x = self._decode(z, beta)
+
+
 
         """
         # iwae samples

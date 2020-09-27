@@ -128,14 +128,16 @@ class Interpolation():
         plt.figure(figsize=(6, 6))
 
 
+        markers = ['s', '^']
+        colors = [(52/256, 77/256, 155/256), (53/256, 160/256, 38/256)]
 
         if labels_str != None:
             labels = np.array(labels)
             ind = labels[:reps] == 2
-            plt.plot(beta_tsne[:reps][ind, 0], beta_tsne[:reps][ind, 1], 'o', color='grey', alpha = 0.5, label=labels_str[2])
+            plt.plot(beta_tsne[:reps][ind, 0], beta_tsne[:reps][ind, 1], '.', color='0.3', label=labels_str[2])
             for l in range(len(np.unique(labels)[:-1])):
                 ind = labels[reps:2*reps]==l
-                plt.plot(beta_tsne[reps:2*reps][ind, 0], beta_tsne[reps:2*reps][ind, 1], 'o', alpha = 0.5, label=labels_str[l])
+                plt.plot(beta_tsne[reps:2*reps][ind, 0], beta_tsne[reps:2*reps][ind, 1], 'o', color=colors[l], marker=markers[l], alpha = 0.7, label=labels_str[l])
         else:
             plt.plot(beta_tsne[:, 0], beta_tsne[:, 1], 'o')
         plt.plot(beta_tsne[-self.steps, 0], beta_tsne[-self.steps, 1], 'ko')
@@ -143,9 +145,6 @@ class Interpolation():
         plt.plot(beta_tsne[-self.steps:, 0], beta_tsne[-self.steps:, 1], 'k-o', label='Interpolation')
         plt.legend(loc='best', fontsize=12)
         plt.savefig(folder + 'interpolation_map.pdf')
-
-
-
 
 
 
@@ -166,7 +165,7 @@ parser.add_argument('--arch', type=str, default='beta_vae',
                     help='Architecture for the model')
 parser.add_argument('--steps', type=int, default=7, metavar='N',
                     help='Number steps in z variable')
-parser.add_argument('--epoch', type=int, default=12,
+parser.add_argument('--epoch', type=int, default=10,
                     help='Epoch to load')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')

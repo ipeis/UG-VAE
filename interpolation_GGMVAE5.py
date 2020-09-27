@@ -177,25 +177,25 @@ class Interpolation():
 
 ########################################################################################################################
 parser = argparse.ArgumentParser(description='Interpolation')
-parser.add_argument('--dim_z', type=int, default=5, metavar='N',
+parser.add_argument('--dim_z', type=int, default=10, metavar='N',
                     help='Dimensions for local latent')
-parser.add_argument('--dim_beta', type=int, default=40, metavar='N',
+parser.add_argument('--dim_beta', type=int, default=50, metavar='N',
                     help='Dimensions for global latent')
-parser.add_argument('--L', type=int, default=10, metavar='N',
+parser.add_argument('--L', type=int, default=200, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
-parser.add_argument('--dataset', type=str, default='mnist_svhn_batch',
+parser.add_argument('--dataset', type=str, default='celeba',
                     help='Name of the dataset')
-parser.add_argument('--arch', type=str, default='k_vae',
+parser.add_argument('--arch', type=str, default='beta_vae',
                     help='Architecture for the model')
 parser.add_argument('--steps', type=int, default=7, metavar='N',
                     help='Number steps in z variable')
-parser.add_argument('--epoch', type=int, default=7,
+parser.add_argument('--epoch', type=int, default=6,
                     help='Epoch to load')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--model_name', type=str, default='GGMVAE5/mnist_svhn',
+parser.add_argument('--model_name', type=str, default='GGMVAE5/celeba_L',
                     help='name for the model to be saved')
 args = parser.parse_args()
 
@@ -227,4 +227,4 @@ if __name__ == "__main__":
 
     Interpolation(steps=steps).encoding(model, batch_1, batch_2, 'epoch_' + str(epoch) + '/')
     Interpolation(steps=steps).sampling(model, 'epoch_' + str(epoch) + '/')
-    Interpolation(steps=steps).map_interpolation(model, train_loader, reps=100,  folder='epoch_' + str(epoch) + '/', labels_str=['mnist', 'SVHN'])
+    #Interpolation(steps=steps).map_interpolation(model, train_loader, reps=100,  folder='epoch_' + str(epoch) + '/', labels_str=['mnist', 'SVHN'])
