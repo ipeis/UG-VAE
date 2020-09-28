@@ -8,7 +8,8 @@ from datasets import *
 from torchvision.utils import save_image
 from sklearn.decomposition import KernelPCA
 from sklearn.manifold import TSNE
-
+from sklearn import metrics
+from sklearn import mixture
 
 
 
@@ -67,6 +68,16 @@ class Interpolation():
             beta_map.append(mu_beta)
             labels.append(2)
 
+        # Adjust a GMM to the global space
+        gmm = mixture.GaussianMixture(n_components=2, covariance_type='diag')
+        map_rnd = torch.stack(beta_map).detach().numpy()
+        gmm.fit(map_rnd)
+        p = gmm.predict_proba(map_rnd)
+        groups_pred = np.argmax(p, axis=1)
+        score_rnd = metrics.silhouette_score(map_rnd, groups_pred, metric='euclidean')
+        print('Clustering score on random batches: ' + str(score_rnd))
+
+
         # grouped data
         for n in range(reps):
             batch, l = iter(loader).next()
@@ -77,6 +88,15 @@ class Interpolation():
             mu_beta, var_beta = model._encode_beta(h, pi)
             beta_map.append(mu_beta)
             labels.append(l[0])
+
+        map_groups = torch.stack(beta_map).detach().numpy()[reps:]
+        gmm.fit(map_groups)
+        p = gmm.predict_proba(map_groups)
+        groups_pred = np.argmax(p, axis=1)
+        groups = labels[reps:]
+        score_groups = metrics.silhouette_score(map_groups, groups_pred, metric='euclidean')
+        print('Clustering score on random batches: ' + str(score_groups))
+
 
         # encode two batches (to interpolate between two samples)
         batch_1, l = iter(loader).next()

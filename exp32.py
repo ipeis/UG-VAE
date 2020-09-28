@@ -167,26 +167,41 @@ plt.savefig(folder + 'exp32b.pdf')
 
 # Adjust a GMM to the global space
 
-gmm = mixture.GaussianMixture(n_components=len(attr_list), covariance_type='full')
+ncomp = np.arange(2, 10)
+score_attr=[]
+score_rnd=[]
+for n in ncomp:
+    gmm = mixture.GaussianMixture(n_components=n, covariance_type='diag')
 
-# Clustering score in the groups
-map_attr = map[3*args.global_points:]
-gmm.fit(map_attr)
-p = gmm.predict_proba(map_attr)
-groups_pred = np.argmax(p, axis=1)
-groups = ind[3*args.global_points:]
-score_attr = metrics.silhouette_score(map_attr, groups_pred, metric='euclidean')
-print('Clustering score on attributes: ' + str(score_attr))
+    # Clustering score in the groups
+    map_attr = map[3*args.global_points:]
+    gmm.fit(map_attr)
+    p = gmm.predict_proba(map_attr)
+    groups_pred = np.argmax(p, axis=1)
+    groups = ind[3*args.global_points:]
+    #score_attr = metrics.silhouette_score(map_attr, groups_pred, metric='euclidean')
+    score_attr.append(gmm.score(map_attr))
+    #print('Clustering score on attributes: ' + str(score_attr))
 
-# Clustering score in the random batches
-#score_rnd = metrics.adjusted_rand_score(groups_pred, groups)
-map_rnd = map[:3*args.global_points]
-gmm.fit(map_rnd)
-p = gmm.predict_proba(map_rnd)
-groups_pred = np.argmax(p, axis=1)
-groups = ind[:3*args.global_points]
-score_rnd = metrics.silhouette_score(map_rnd, groups_pred, metric='euclidean')
-print('Clustering score on random batches: ' + str(score_rnd))
+    # Clustering score in the random batches
+    #score_rnd = metrics.adjusted_rand_score(groups_pred, groups)
+    map_rnd = map[:3*args.global_points]
+    gmm.fit(map_rnd)
+    p = gmm.predict_proba(map_rnd)
+    groups_pred = np.argmax(p, axis=1)
+    groups = ind[:3*args.global_points]
+    #score_rnd = metrics.silhouette_score(map_rnd, groups_pred, metric='euclidean')
+    score_rnd.append(gmm.score(map_rnd))
+    #print('Clustering score on random batches: ' + str(score_rnd))
 
-2
+
+plt.figure(figsize=(5, 5))
+plt.plot(ncomp, score_attr, 's-', label='Grouped data')
+plt.plot(ncomp, score_rnd, 's:', label='Random data')
+plt.xlabel('Components')
+plt.ylabel('Log-likelihood')
+plt.grid()
+plt.legend(loc='best')
+plt.savefig(folder + 'gmm.pdf')
+
 

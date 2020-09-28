@@ -10,15 +10,15 @@ from torch.distributions import MultivariateNormal as Normal
 parser = argparse.ArgumentParser(description='Train GGMVAE')
 parser.add_argument('--dim_z', type=int, default=10, metavar='N',
                     help='Dimensions for local latent')
-parser.add_argument('--dim_beta', type=int, default=50, metavar='N',
+parser.add_argument('--dim_beta', type=int, default=20, metavar='N',
                     help='Dimensions for global latent')
-parser.add_argument('--L', type=int, default=200, metavar='N',
+parser.add_argument('--L', type=int, default=2, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
-parser.add_argument('--dataset', type=str, default='celeba',
+parser.add_argument('--dataset', type=str, default='mnist_clean_corrupted_batch',
                     help='Name of the dataset')
-parser.add_argument('--arch', type=str, default='beta_vae',
+parser.add_argument('--arch', type=str, default='k_vae',
                     help='Architecture for the model')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
@@ -32,7 +32,7 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--model_name', type=str, default='GGMVAE5/celeba_L',
+parser.add_argument('--model_name', type=str, default='GGMVAE5/mnist_clean_corrupted_batch',
                     help='name for the model to be saved')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -94,7 +94,7 @@ dim_beta = args.dim_beta
 L = args.L
 var_x = args.var_x
 
-distribution = distributions[args.dataset]
+distribution = 'gaussian'
 nchannels = nchannels[args.dataset]
 
 
@@ -117,7 +117,7 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
     train_kld = 0
     train_klbeta = 0
     nims = len(train_loader.dataset)
-    if args.dataset=='mnist_svhn' or args.dataset=='mnist_svhn_batch' or args.dataset=='mnist_usps_batch' or args.dataset=='celeba_faces' or args.dataset=='celeba_faces_batch' or args.dataset=='celeba_lfw':
+    if args.dataset=='mnist_svhn' or args.dataset=='mnist_svhn_batch' or args.dataset=='mnist_clean_corrupted_batch' or args.dataset=='celeba_faces' or args.dataset=='celeba_faces_batch' or args.dataset=='celeba_lfw':
         #Reset loader each epoch
         data_tr.reset()
         #train_loader = torch.utils.data.DataLoader(data_tr, batch_size=args.batch_size, shuffle=True)
@@ -162,7 +162,7 @@ def test(model, epoch, test_loader, cuda=False, model_name='model'):
     test_klbeta = 0
     nims = len(test_loader.dataset)
     with torch.no_grad():
-        if args.dataset == 'mnist_svhn' or args.dataset=='mnist_svhn_batch' or args.dataset=='mnist_usps_batch' or args.dataset=='celeba_faces' or args.dataset=='celeba_faces_batch' or args.dataset=='celeba_lfw':
+        if args.dataset == 'mnist_svhn' or args.dataset=='mnist_svhn_batch' or args.dataset=='mnist_clean_corrupted_batch' or args.dataset=='celeba_faces' or args.dataset=='celeba_faces_batch' or args.dataset=='celeba_lfw':
             # Reset loader each epoch
             data_test.reset()
             #test_loader = torch.utils.data.DataLoader(data_test, batch_size=args.batch_size, shuffle=True)

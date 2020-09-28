@@ -287,16 +287,22 @@ elif args.dataset == 'mnist_series':
 
     # Adjust a GMM to the global space
 
-    gmm = mixture.GaussianMixture(n_components=len(data_tr.series), covariance_type='full')
+    ncomp = np.arange(2, 10)
+    score_attr = []
+    for n in ncomp:
+        gmm = mixture.GaussianMixture(n_components=n, covariance_type='diag')
 
-    # Clustering score in the groups
-    map_attr = mu_g
-    gmm.fit(map_attr)
-    p = gmm.predict_proba(map_attr)
-    groups_pred = np.argmax(p, axis=1)
-    groups = labels_g
-    score_attr = metrics.silhouette_score(map_attr, groups_pred, metric='euclidean')
-    print('Clustering score on attributes: ' + str(score_attr))
+        # Clustering score in the groups
+        map_attr = mu_g
+        gmm.fit(map_attr)
+        p = gmm.predict_proba(map_attr)
+        groups_pred = np.argmax(p, axis=1)
+        groups = labels_g
+        # score_attr = metrics.silhouette_score(map_attr, groups_pred, metric='euclidean')
+        score_attr.append(gmm.score(map_attr))
+        # print('Clustering score on attributes: ' + str(score_attr))
+
+    #print('Clustering score on attributes: ' + str(score_attr))
 
 
 
@@ -334,15 +340,28 @@ elif args.dataset == 'mnist_series':
 
     mu_g_all = np.concatenate((mu_g, mu_g_series), axis=0)
 
-    # Clustering score in the random batches
-    # score_rnd = metrics.adjusted_rand_score(groups_pred, groups)
-    map_rnd = mu_g[:args.global_points]
-    gmm.fit(map_rnd)
-    p = gmm.predict_proba(map_rnd)
-    groups_pred = np.argmax(p, axis=1)
-    score_rnd = metrics.silhouette_score(map_rnd, groups_pred, metric='euclidean')
-    print('Clustering score on random batches: ' + str(score_rnd))
+    score_rnd = []
+    for n in ncomp:
+        gmm = mixture.GaussianMixture(n_components=n, covariance_type='diag')
 
+        # Clustering score in the groups
+        map_rnd = mu_g
+        gmm.fit(map_rnd)
+        p = gmm.predict_proba(map_rnd)
+        groups_pred = np.argmax(p, axis=1)
+        groups = labels_g
+        # score_attr = metrics.silhouette_score(map_attr, groups_pred, metric='euclidean')
+        score_rnd.append(gmm.score(map_rnd))
+        # print('Clustering score on attributes: ' + str(score_attr))
+
+    plt.figure(figsize=(6, 6))
+    plt.plot(ncomp, score_attr, 's-', label='Grouped data')
+    plt.plot(ncomp, score_rnd, 's:', label='Random data')
+    plt.xlabel('Components')
+    plt.ylabel('Log-likelihood')
+    plt.grid()
+    plt.legend(loc='best')
+    plt.savefig(folder + 'gmm.pdf')
 
     ########################################################################################################################
     if args.dim_reduction == 'tsne':
@@ -363,7 +382,7 @@ elif args.dataset == 'mnist_series':
     import matplotlib.patches as mpatches
     colors = 'r', 'g', 'b', 'c', 'm', 'y', 'k', 'pink', 'orange', 'purple'
 
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(5, 5))
     plt.plot(X_g_mix[:, 0], X_g_mix[:, 1], '.', color=(27/256, 46/256, 104/256), alpha=0.8, label='random')
 
 

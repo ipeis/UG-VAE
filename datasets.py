@@ -35,20 +35,19 @@ class CelebA(Dataset):
     def get_data_tr(self):
         return Subset(self, self.tr_idx), Subset(self, self.val_idx), Subset(self, self.test_idx)
 
-
 class Mnist_Svhn(Dataset):
 
     def __init__(self, path='./data/', split='train'):
 
         self.path = path
         self.mnist= datasets.MNIST(path, train=split=='train', download=True,
-                                       transform=transforms.Compose([transforms.Lambda(lambda image: image.convert('RGB')),
-                                                                     transforms.Resize(32),
-                                                                     transforms.ToTensor(),
-                                                                     transforms.Normalize([0, 0, 0], [1, 1, 1])]))
+                                       transform=transforms.Compose([transforms.ToTensor(),
+                                                                     transforms.Normalize([0], [1])]))
         self.svhn = datasets.SVHN(path, split=split, download=True,
-                        transform= transforms.Compose([transforms.ToTensor(),
-                                                       transforms.Normalize([0, 0, 0], [1, 1, 1])]))
+                        transform= transforms.Compose([transforms.Grayscale(),
+                                                       transforms.Resize((28, 28)),
+                                                       transforms.ToTensor(),
+                                                       transforms.Normalize([0], [1])]))
 
         self.mnist_loader = iter(torch.utils.data.DataLoader( self.mnist, batch_size=1, shuffle=True))
         self.svhn_loader = iter(torch.utils.data.DataLoader( self.svhn, batch_size=1, shuffle=True))
@@ -64,7 +63,7 @@ class Mnist_Svhn(Dataset):
             image, label = self.svhn_loader.next()
 
         label = torch.cat([label, torch.tensor([k])])
-        return image.view(3, 32, 32), label
+        return image.view(1, 28, 28), label
 
     def __len__(self):
         return self.nims
@@ -72,7 +71,6 @@ class Mnist_Svhn(Dataset):
     def reset(self):
         self.mnist_loader = iter(torch.utils.data.DataLoader(self.mnist, batch_size=1, shuffle=True))
         self.svhn_loader = iter(torch.utils.data.DataLoader(self.svhn, batch_size=1, shuffle=True))
-
 
 
 class Mnist_Usps(Dataset):
@@ -739,14 +737,14 @@ class MnistSvhnBatch(Dataset):
     def __init__(self, path='./data/', split='train', batch_size=128):
 
         self.path = path
-        self.mnist = datasets.MNIST(path, train=split == 'train', download=True,
-                                    transform=transforms.Compose([transforms.Lambda(lambda image: image.convert('RGB')),
-                                                                  transforms.Resize(32),
-                                                                  transforms.ToTensor(),
-                                                                  transforms.Normalize([0, 0, 0], [1, 1, 1])]))
-        self.svhn = datasets.SVHN(path, split=split, download=True,
-                                  transform=transforms.Compose([transforms.ToTensor(),
-                                                                transforms.Normalize([0, 0, 0], [1, 1, 1])]))
+        self.mnist = datasets.MNIST(path, train=split=='train', download=True,
+                                       transform=transforms.Compose([transforms.Resize((32, 32)),
+                                                                     transforms.ToTensor(),
+                                                                     transforms.Normalize([0], [1])]))
+        self.svhn = datasets.SVHN('../data', split='train', download=False,
+                                transform=transforms.Compose([transforms.Grayscale(),
+                                                              transforms.ToTensor(),
+                                                              transforms.Normalize([0], [1])]))
 
         self.mnist_loader = iter(torch.utils.data.DataLoader( self.mnist, batch_size=1, shuffle=True))
         self.svhn_loader = iter(torch.utils.data.DataLoader( self.svhn, batch_size=1, shuffle=True))
@@ -772,7 +770,7 @@ class MnistSvhnBatch(Dataset):
 
         label = self.k
 
-        return image.view(3, 32, 32), label
+        return image.view(1, 32, 32), label
 
     def __len__(self):
         return self.nims
@@ -783,6 +781,53 @@ class MnistSvhnBatch(Dataset):
     def reset_svhn(self):
         self.svhn_loader = iter(torch.utils.data.DataLoader(self.svhn, batch_size=1, shuffle=True))
 
+
+class MnistCleanCorruptedBatch(Dataset):
+
+    def __init__(self, path='./data/', split='train', batch_size=128):
+
+        self.path = path
+        self.mnist = datasets.MNIST(path, train=split=='train', download=True,
+                                       transform=transforms.ToTensor())
+        self.mnist_corr = datasets.MNIST('./data/', train=split=='train', download=True,
+                                    transform=transforms.Compose([transforms.RandomAffine(degrees=30, translate=(0.3, 0.3)),
+                                                                  transforms.ToTensor(), Distort(num_pixels=150)]))
+
+        self.mnist_loader = iter(torch.utils.data.DataLoader( self.mnist, batch_size=1, shuffle=True))
+        self.mnist_corr_loader = iter(torch.utils.data.DataLoader( self.mnist_corr, batch_size=1, shuffle=True))
+
+        self.batch_size = batch_size
+
+        self.nims = int(0.9 * (self.mnist.__len__() + self.mnist_corr.__len__()) )
+
+        self.count = 0
+        self.k = int(np.round(np.random.uniform(0, 1)))
+        self.fcount=0
+
+    def __getitem__(self, index):
+        if self.k == 0:
+            image, label = self.mnist_loader.next()
+        else:
+            image, label = self.mnist_corr_loader.next()
+
+        self.count += 1
+        if self.count == self.batch_size:
+            self.count = 0
+            self.k = int(np.round(np.random.uniform(0, 1)))
+
+        label = self.k
+
+        return image.view(1, 28, 28), label
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.mnist_loader = iter(torch.utils.data.DataLoader(self.mnist, batch_size=1, shuffle=True))
+        self.mnist_corr_loader = iter(torch.utils.data.DataLoader(self.mnist_corr, batch_size=1, shuffle=True))
+
+    def reset_mnist_corr(self):
+        self.mnist_corr_loader = iter(torch.utils.data.DataLoader(self.mnist_corr, batch_size=1, shuffle=True))
 
 
 class MnistUspsBatch(Dataset):
@@ -863,6 +908,26 @@ class CelebAttribute(Dataset):
         return self.nsamples
 
 
+########################################################################################################################
+
+class Distort(object):
+    """Rescale the image in a sample to a given size.
+
+    Args:
+        output_size (tuple or int): Desired output size. If tuple, output is
+            matched to output_size. If int, smaller of image edges is matched
+            to output_size keeping aspect ratio the same.
+    """
+
+    def __init__(self, num_pixels=1):
+        assert isinstance(num_pixels, int)
+        self.num_pixels = num_pixels
+
+    def __call__(self, sample):
+        for n in range(self.num_pixels):
+            sample[0][int(np.random.rand() * 28)][int(np.random.rand() * 28)] = np.random.rand()
+        return sample
+
 
 
 ########################################################################################################################
@@ -872,8 +937,11 @@ nchannels = {
     'celeba': 3,
     'light_celeba': 3,
     'mnist': 1,
-    'mnist_svhn': 3,
-    'mnist_svhn_batch': 3,
+    'distorted_mnist': 1,
+    'mnist_clean_corrupted_batch': 1,
+    'svhn': 1,
+    'mnist_svhn': 1,
+    'mnist_svhn_batch': 1,
     'mnist_usps': 1,
     'mnist_usps_batch': 3,
     'mnist_series': 1,
@@ -888,10 +956,14 @@ nchannels = {
     'fashion_mnist': 1,
     'celeba_attribute': 3,
 }
+
+"""
 distributions = {
     'celeba': 'gaussian',
     'light_celeba': 'gaussian',
     'mnist': 'gaussian',
+    'distorted_mnist': 'gaussian',
+    'mnist_clean_corrupted_batch': 'gaussian',
     'mnist_svhn': 'gaussian',
     'mnist_svhn_batch': 'gaussian',
     'mnist_usps': 'gaussian',
@@ -907,9 +979,9 @@ distributions = {
     'cifar10': 'gaussian',
     'stl10': 'gaussian',
     'fashion_mnist': 'bernoulli',
-
 }
 
+"""
 
 ########################################################################################################################
 
@@ -1043,6 +1115,33 @@ def get_data(name, **args):
         data_tr = CelebAttribute(path='./data/celeba/', attr=args['attr'], split='train')
         data_test = None
         data_val = None
+    elif name.lower()=='corrupted_mnist':
+        data_tr = datasets.MNIST('./data/', train=True, download=True,
+                                    transform=transforms.Compose([transforms.RandomAffine(degrees=30, translate=(0.3, 0.3)),
+                                                                  transforms.ToTensor(), Distort(num_pixels=150)]))
+        data_test = datasets.MNIST('./data/', train=False, download=True,
+                                    transform=transforms.Compose([transforms.RandomAffine(degrees=30, translate=(0.3, 0.3)),
+                                                                  transforms.ToTensor(), Distort(num_pixels=150)]))
+        data_val = None
+
+    elif name.lower()=='mnist_clean_corrupted_batch':
+        data_tr = MnistCleanCorruptedBatch(split='train')
+        data_test = MnistCleanCorruptedBatch(split='test')
+        data_val = None
+
+    elif name.lower()=='svhn':
+        data_tr = datasets.SVHN('../data', split='train', download=False,
+                                transform=transforms.Compose([transforms.Grayscale(),
+                                                              transforms.Resize((28, 28)),
+                                                              transforms.ToTensor(),
+                                                              transforms.Normalize([0], [1])]))
+        data_test = datasets.SVHN('../data', split='test', download=False,
+                                  transform=transforms.Compose([transforms.Grayscale(),
+                                                                transforms.Resize((28, 28)),
+                                                                transforms.ToTensor(),
+                                                                transforms.Normalize([0], [1])]))
+        data_val = None
+
 
     else:
         print('Dataset not valid')
