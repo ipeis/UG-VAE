@@ -34,7 +34,7 @@ parser.add_argument('--attribute', type=str, default='',
                     help='Attribute to plot (default None)')
 parser.add_argument('--dim_reduction', type=str, default='tsne',
                     help='Dimensionality reduction to apply (default tsne)')
-parser.add_argument('--model_name', type=str, default='GGMVAE5/mnist_series',
+parser.add_argument('--model_name', type=str, default='UG-VAE/mnist_series',
                     help='name for the model to be saved')
 args = parser.parse_args()
 

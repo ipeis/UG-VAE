@@ -43,7 +43,7 @@ def plot_losses(tr_losses, test_losses, tr_recs, test_recs,
 
 
 
-model_name = 'GGMVAE5/mnist_var2e-1'
+model_name = 'UG-VAE/mnist_var2e-1'
 
 
 losses = np.load('results/' + model_name + '/checkpoints/losses.npy', allow_pickle=True).tolist()

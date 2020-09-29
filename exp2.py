@@ -189,7 +189,7 @@ parser.add_argument('--epoch', type=int, default=10,
                     help='Epoch to load')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--model_name', type=str, default='GGMVAE5/celeba_faces',
+parser.add_argument('--model_name', type=str, default='UG-VAE/celeba_faces',
                     help='name for the model to be saved')
 args = parser.parse_args()
 

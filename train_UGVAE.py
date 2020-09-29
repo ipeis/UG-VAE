@@ -7,34 +7,32 @@ from torchvision.utils import save_image
 from torch.distributions import MultivariateNormal as Normal
 
 ########################################################################################################################
-parser = argparse.ArgumentParser(description='Train GLVAE')
+parser = argparse.ArgumentParser(description='Train GGMVAE')
 parser.add_argument('--dim_z', type=int, default=10, metavar='N',
                     help='Dimensions for local latent')
-parser.add_argument('--dim_beta', type=int, default=10, metavar='N',
+parser.add_argument('--dim_beta', type=int, default=20, metavar='N',
                     help='Dimensions for global latent')
-parser.add_argument('--K', type=int, default=10, metavar='N',
+parser.add_argument('--L', type=int, default=2, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
-parser.add_argument('--dataset', type=str, default='celeba',
+parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
+                    help='Number of components for the Gaussian Global mixture')
+parser.add_argument('--dataset', type=str, default='mnist_clean_corrupted_batch',
                     help='Name of the dataset')
-parser.add_argument('--arch', type=str, default='beta_vae',
+parser.add_argument('--arch', type=str, default='k_vae',
                     help='Architecture for the model')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
 parser.add_argument('--epochs', type=int, default=500, metavar='N',
                     help='number of epochs to train (default: 10)')
-parser.add_argument('--beta_l', type=float, default=1.0, metavar='N',
-                    help='Value for local beta disentanglement factor')
-parser.add_argument('--beta_g', type=float, default=1.0, metavar='N',
-                    help='Value for global beta disentanglement factor')
-parser.add_argument('--save_each', type=int, default=10, metavar='N',
+parser.add_argument('--save_each', type=int, default=1, metavar='N',
                     help='save model and figures each _ epochs (default: 10)')
 parser.add_argument('--no_cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--model_name', type=str, default='trained',
+parser.add_argument('--model_name', type=str, default='UG-VAE/mnist_clean_corrupted_batch',
                     help='name for the model to be saved')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -93,18 +91,17 @@ test_loader = torch.utils.data.DataLoader(data_test, batch_size = batch_size, sh
 
 dim_z = args.dim_z
 dim_beta = args.dim_beta
-K = args.K
+L = args.L
+var_x = args.var_x
 
-distribution = distributions[args.dataset]
+distribution = 'gaussian'
 nchannels = nchannels[args.dataset]
 
 
-model = MGLVAEp(channels=nchannels, dim_z=dim_z, dim_beta=dim_beta, K=K, arch=args.arch, device=device).to(device)
+model = GGMVAE5(channels=nchannels, dim_z=dim_z, dim_beta=dim_beta, L=L, var_x=var_x, arch=args.arch, device=device).to(device)
 
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
+optimizer = optim.Adam(model.parameters(), lr=5e-3)
 
-beta_l = torch.tensor(args.beta_l).to(device)
-beta_g = torch.tensor(args.beta_g).to(device)
 
 ########################################################################################################################
 ########################################################################################################################
@@ -117,10 +114,10 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
     train_loss = 0
     train_rec = 0
     train_klz = 0
-    #train_klbeta = 0
-    train_klalpha = 0
+    train_kld = 0
+    train_klbeta = 0
     nims = len(train_loader.dataset)
-    if args.dataset=='mnist_svhn' or args.dataset=='celeba_faces' or args.dataset=='celeba_faces_batch':
+    if args.dataset=='mnist_svhn' or args.dataset=='mnist_svhn_batch' or args.dataset=='mnist_clean_corrupted_batch' or args.dataset=='celeba_faces' or args.dataset=='celeba_faces_batch' or args.dataset=='celeba_lfw':
         #Reset loader each epoch
         data_tr.reset()
         #train_loader = torch.utils.data.DataLoader(data_tr, batch_size=args.batch_size, shuffle=True)
@@ -132,14 +129,14 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
     for batch_idx, (data, _) in enumerate(train_loader):
         data = data.to(device).view(-1, nchannels, data.shape[-2], data.shape[-1])
         optimizer.zero_grad()
-        recon_batch, mu_z, var_z, pk, mu_beta, var_beta = model.forward(data)
-        loss, rec, klz, klalpha = model.loss_function(recon_batch, data, mu_z, var_z, pk, distribution)
+        mu_x, mu_z, var_z, mus_z, vars_z, mu_beta, var_beta, pi = model(data)
+        loss, rec, klz, kld, klbeta = model.loss_function(data, mu_x, mu_z, var_z, mus_z, vars_z, mu_beta, var_beta, pi)
         loss.backward()
         train_loss += loss.item()
         train_rec += rec.item()
         train_klz += klz.item()
-        #train_klbeta += klbeta.item()
-        train_klalpha += klalpha.item()
+        train_kld += kld.item()
+        train_klbeta += klbeta.item()
         optimizer.step()
         if batch_idx % log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
@@ -151,7 +148,7 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
         epoch, train_loss / nims))
 
     return train_loss / nims, train_rec / nims, \
-           train_klz / nims, train_klalpha / nims
+           train_klz / nims, train_kld / nims, train_klbeta / nims
 
 
 def test(model, epoch, test_loader, cuda=False, model_name='model'):
@@ -161,11 +158,11 @@ def test(model, epoch, test_loader, cuda=False, model_name='model'):
     test_loss = 0
     test_rec = 0
     test_klz = 0
-    #test_klbeta = 0
-    test_klalpha = 0
+    test_kld = 0
+    test_klbeta = 0
     nims = len(test_loader.dataset)
     with torch.no_grad():
-        if args.dataset == 'mnist_svhn' or args.dataset=='celeba_faces' or args.dataset=='celeba_faces_batch':
+        if args.dataset == 'mnist_svhn' or args.dataset=='mnist_svhn_batch' or args.dataset=='mnist_clean_corrupted_batch' or args.dataset=='celeba_faces' or args.dataset=='celeba_faces_batch' or args.dataset=='celeba_lfw':
             # Reset loader each epoch
             data_test.reset()
             #test_loader = torch.utils.data.DataLoader(data_test, batch_size=args.batch_size, shuffle=True)
@@ -174,49 +171,64 @@ def test(model, epoch, test_loader, cuda=False, model_name='model'):
             nims = data_test.nbatches * data_test.batch_size
         for i, (data, _) in enumerate(test_loader):
             data = data.to(device).view(-1, nchannels, data.shape[-2], data.shape[-1])
-            recon_batch, mu_z, var_z, pk, mu_beta, var_beta = model.forward(data)
-            loss, rec, klz, klalpha = model.loss_function(recon_batch, data, mu_z, var_z, pk,
-                                                                distribution)
+            mu_x, mu_z, var_z, mus_z, vars_z, mu_beta, var_beta, pi = model(data)
+            loss, rec, klz, kld, klbeta = model.loss_function(data, mu_x, mu_z, var_z, mus_z, vars_z,
+                                                                       mu_beta, var_beta, pi)
             test_loss += loss.item()
             test_rec += rec.item()
             test_klz += klz.item()
-            #test_klbeta += klbeta.item()
-            test_klalpha += klalpha.item()
+            test_kld += kld.item()
+            test_klbeta += klbeta.item()
 
             if i == 0 and (np.mod(epoch, args.save_each)==0 or epoch==1 or epoch==args.epochs):
                 n = min(data.size(0), 8)
-                k = Cat(pk).sample().to(device)
                 comparison = torch.cat([data[:n],
-                                        recon_batch[k][:n]])
+                                        mu_x[:n]])
                 save_image(comparison.cpu(),
                            'results/' + model_name + '/figs/reconstructions/reconstruction_' + str(epoch) + '.png', nrow=n)
 
     test_loss /= nims
     test_rec /= nims
     test_klz /= nims
-    test_klalpha /= nims
+    test_kld /= nims
+    test_klbeta /= nims
     print('====> Test set loss: {:.4f}'.format(test_loss))
 
-    return test_loss, test_rec, test_klz, test_klalpha
+    return test_loss, test_rec, test_klz, test_kld, test_klbeta
 
 
 
 
 def plot_losses(model, tr_losses, test_losses, tr_recs, test_recs,
                 tr_klzs, test_klzs,
-                tr_klalphas, test_klalphas,
+                tr_klds, test_klds,
+                tr_klbetas, test_klbetas,
                 model_name='model'):
     prop_cycle = plt.rcParams['axes.prop_cycle']
     colors = prop_cycle.by_key()['color']
     plt.figure()
-    plt.semilogy(tr_losses, color=colors[0], label='train_loss')
-    plt.semilogy(test_losses, color=colors[0], linestyle=':')
-    plt.semilogy(tr_recs, color=colors[1], label='train_rec')
-    plt.semilogy(test_recs, color=colors[1], linestyle=':')
-    plt.semilogy(tr_klzs, color=colors[2], label=r'$KL_z$')
-    plt.semilogy(test_klzs, color=colors[2], linestyle=':')
-    plt.semilogy(tr_klalphas, color=colors[4], label=r'$KL_\alpha$')
-    plt.semilogy(test_klalphas, color=colors[4], linestyle=':')
+    if np.mean(tr_losses[:10])>=0:
+        plt.semilogy(tr_losses, color=colors[0], label='train_loss')
+        plt.semilogy(test_losses, color=colors[0], linestyle=':')
+        plt.semilogy(tr_recs, color=colors[1], label='train_rec')
+        plt.semilogy(test_recs, color=colors[1], linestyle=':')
+        plt.semilogy(tr_klzs, color=colors[2], label=r'$KL_z$')
+        plt.semilogy(test_klzs, color=colors[2], linestyle=':')
+        plt.semilogy(tr_klds, color=colors[4], label=r'$KL_d$')
+        plt.semilogy(test_klds, color=colors[4], linestyle=':')
+        plt.semilogy(tr_klbetas, color=colors[5], label=r'$KL_\beta$')
+        plt.semilogy(test_klbetas, color=colors[5], linestyle=':')
+    else:
+        plt.plot(tr_losses, color=colors[0], label='train_loss')
+        plt.plot(test_losses, color=colors[0], linestyle=':')
+        plt.plot(tr_recs, color=colors[1], label='train_rec')
+        plt.plot(test_recs, color=colors[1], linestyle=':')
+        plt.plot(tr_klzs, color=colors[2], label=r'$KL_z$')
+        plt.plot(test_klzs, color=colors[2], linestyle=':')
+        plt.plot(tr_klds, color=colors[4], label=r'$KL_d$')
+        plt.plot(test_klds, color=colors[4], linestyle=':')
+        plt.plot(tr_klbetas, color=colors[5], label=r'$KL_\beta$')
+        plt.plot(test_klbetas, color=colors[5], linestyle=':')
     plt.grid()
     plt.xlabel('epoch')
     plt.ylabel('mean loss')
@@ -242,29 +254,31 @@ if __name__ == "__main__":
     tr_losses = []
     tr_recs = []
     tr_klzs = []
+    tr_klds = []
     tr_klbetas = []
-    tr_klalphas = []
     test_losses = []
     test_recs = []
     test_klzs = []
+    test_klds = []
     test_klbetas = []
-    test_klalphas = []
 
     for epoch in range(1, args.epochs + 1):
 
-        tr_loss, tr_rec, tr_klz, tr_klalpha = train_epoch(model, epoch, train_loader, optimizer,
+        tr_loss, tr_rec, tr_klz, tr_kld, tr_klbeta = train_epoch(model, epoch, train_loader, optimizer,
                                                               cuda=args.cuda, log_interval=args.log_interval)
         tr_losses.append(tr_loss)
         tr_recs.append(tr_rec)
         tr_klzs.append(tr_klz)
-        tr_klalphas.append(tr_klalpha)
+        tr_klds.append(tr_kld)
+        tr_klbetas.append(tr_klbeta)
 
-        test_loss, test_rec, test_klz, test_klalpha = test(model, epoch, test_loader,
+        test_loss, test_rec, test_klz, test_kld, test_klbeta = test(model, epoch, test_loader,
                                                                cuda=args.cuda, model_name=model_name)
         test_losses.append(test_loss)
         test_recs.append(test_rec)
         test_klzs.append(test_klz)
-        test_klalphas.append(test_klalpha)
+        test_klds.append(test_kld)
+        test_klbetas.append(test_klbeta)
 
         # Save figures
         with torch.no_grad():
@@ -276,24 +290,27 @@ if __name__ == "__main__":
                 'test_recs': test_recs,
                 'tr_klzs': tr_klzs,
                 'test_klzs': test_klzs,
-                'tr_klalphas': tr_klalphas,
-                'test_klalphas': test_klalphas
+                'tr_klds': tr_klds,
+                'test_klds': test_klds,
+                'tr_klbetas': tr_klbetas,
+                'test_klbetas': test_klbetas
             }
             np.save('results/' + model_name + '/checkpoints/losses', losses)
             plot_losses(model, tr_losses, test_losses, tr_recs, test_recs,
-                        tr_klzs, test_klzs, tr_klalphas, test_klalphas,
+                        tr_klzs, test_klzs, tr_klds, test_klds,
+                        tr_klbetas, test_klbetas,
                         model_name=model_name)
             if np.mod(epoch, args.save_each)==0 or epoch==1 or epoch==args.epochs:
 
-                sample_z = torch.randn(64, dim_z).to(device)
-                k = np.random.choice(a=np.arange(K), p=model.prior_alpha[0].cpu())
-                k_oh = torch.zeros(1, K).to(device)
-                k_oh[0][k] = 1
-                mu_beta, var_beta = model._beta_mix(k_oh)
-                sample_beta = Normal(mu_beta, torch.diag(var_beta[0])).sample().view(dim_beta).to(device)
-                sample = model._decode(sample_z, sample_beta).cpu()
-                save_image(sample,
-                           'results/' + model_name + '/figs/samples/sample_' + str(epoch) + '.png')
+                sample_beta = torch.randn(dim_beta).to(device)
+                mus_z, vars_z = model._z_prior(sample_beta)
+                samples_z = torch.stack([torch.stack(
+                    [Normal(mu_z, torch.diag(var_z)).sample().to(device) for mu_z, var_z in zip(mus_z, vars_z)]) for i
+                    in range(64)])  # [64, K, dim_z]
+                samples = [model._decode(samples_z[:, l], sample_beta ) for l in range(L)]
+                [save_image(samples[l],
+                            'results/' + model_name + '/figs/samples/sample_' + str(epoch) + '_L' + str(l) + '.png') for
+                 l in range(L)]
                 plt.close('all')
 
                 save_model(model, epoch, model_name=model_name)

@@ -1,4 +1,4 @@
-from GLVAE import *
+from models import *
 import argparse
 from torchvision import datasets, transforms
 from torch import nn, optim

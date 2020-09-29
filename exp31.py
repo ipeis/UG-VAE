@@ -31,7 +31,7 @@ parser.add_argument('--attribute', type=str, default='',
                     help='Attribute to plot (default None)')
 parser.add_argument('--dim_reduction', type=str, default='tsne',
                     help='Dimensionality reduction to apply (default tsne)')
-parser.add_argument('--model_name', type=str, default='GGMVAE5/mnist',
+parser.add_argument('--model_name', type=str, default='UG-VAE/mnist',
                     help='name for the model to be saved')
 args = parser.parse_args()
 
@@ -354,7 +354,7 @@ elif args.dataset == 'mnist_series':
         score_rnd.append(gmm.score(map_rnd))
         # print('Clustering score on attributes: ' + str(score_attr))
 
-    plt.figure(figsize=(6, 6))
+    plt.figure(figsize=(5, 5))
     plt.plot(ncomp, score_attr, 's-', label='Grouped data')
     plt.plot(ncomp, score_rnd, 's:', label='Random data')
     plt.xlabel('Components')

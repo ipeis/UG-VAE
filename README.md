@@ -1,5 +1,6 @@
 # GLVAE
 Code for GLVAE, a VAE framwork that aggregates both local and global latent spaces.
 
-<img src="figs/model.png" data-canonical-src="figs/model.png" width="200" />
+<img src="gen.png" data-canonical-src="figs/gen.pdf" width="200" />
+<img src="gen.png" data-canonical-src="figs/gen.pdf" width="200" />
 

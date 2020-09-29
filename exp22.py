@@ -102,7 +102,7 @@ def align_test(model, loader, aligner, beta_global):
 
         if i<5:
 
-            folder = 'results/GGMVAE5/' + model_name + '/figs/domain_alignment/'
+            folder = 'results/UG-VAE/' + model_name + '/figs/domain_alignment/'
             if os.path.isdir(folder) == False:
                 os.makedirs(folder)
 
@@ -190,7 +190,7 @@ print("Test accuracy for corrupted-MNIST using clean-MNIST classifier: {:.3f}% "
 ###                         Load global generative model                           ###
 ######################################################################################
 
-state_dict = torch.load('results/GGMVAE5/' +  model_name + '/checkpoints/checkpoint_' + str(epoch) + '.pth',
+state_dict = torch.load('results/UG-VAE/' +  model_name + '/checkpoints/checkpoint_' + str(epoch) + '.pth',
                             map_location=torch.device('cpu'))
 model = GGMVAE5(channels=1, dim_z=10, dim_beta=20, L=10, var_x=2e-1, arch='k_vae')
 model.load_state_dict(state_dict)
