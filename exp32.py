@@ -8,7 +8,11 @@ import matplotlib.pyplot as plt
 from torchvision.utils import save_image
 from sklearn import metrics
 from sklearn import mixture
-
+from sklearn.svm import SVC
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+import numpy as np
 
 ########################################################################################################################
 parser = argparse.ArgumentParser(description='Interpolation')
@@ -16,7 +20,7 @@ parser.add_argument('--dim_z', type=int, default=20, metavar='N',
                     help='Dimensions for local latent')
 parser.add_argument('--dim_beta', type=int, default=50, metavar='N',
                     help='Dimensions for global latent')
-parser.add_argument('--L', type=int, default=20, metavar='N',
+parser.add_argument('--K', type=int, default=20, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
@@ -40,7 +44,7 @@ args = parser.parse_args()
 
 # load model
 
-model = GGMVAE5(channels=nchannels['celeba'], dim_z=args.dim_z, dim_beta=args.dim_beta, L=args.L, arch=args.arch)
+model = UGVAE(channels=nchannels['celeba'], dim_z=args.dim_z, dim_beta=args.dim_beta, K=args.K, arch=args.arch)
 state_dict = torch.load('./results/' + args.model_name + '/checkpoints/checkpoint_' + str(args.epoch) + '.pth',
                         map_location=torch.device('cpu'))
 model.load_state_dict(state_dict)
@@ -156,52 +160,31 @@ plt.plot(z[ind==-1, 0], z[ind==-1, 1], '.', color='k', alpha=0.6, label='random'
 [plt.plot(z[ind==i, 0], z[ind==i, 1], 'o', color=colors[i], alpha=0.7, label=attrs[attr_list[i]]) for i in range(len(attr_list))]
 
 plt.legend(loc='best')
-plt.savefig(folder + 'exp32b.pdf')
-
-
+plt.savefig(folder + 'exp32.pdf')
 
 
 
 ########################################################################################################################
-# Clustering performance
+# Train a classifier over black and blond haired people, using global latent space
 
-# Adjust a GMM to the global space
+clf_lin = make_pipeline(StandardScaler(), SVC(kernel='linear', gamma='auto'))
+clf_nolin = make_pipeline(StandardScaler(), SVC(kernel='rbf', gamma='auto'))
+X = map[3*args.global_points:]
+y = ind[3*args.global_points:]
+X = map
+y = ind
+y+=1
+y[y==-1]=0
 
-ncomp = np.arange(2, 10)
-score_attr=[]
-score_rnd=[]
-for n in ncomp:
-    gmm = mixture.GaussianMixture(n_components=n, covariance_type='diag')
+X_train, X_test, y_train, y_test = train_test_split( X, y, test_size=0.2, random_state=42)
+print('Fitting linear classifier')
+clf_lin.fit(X_train, y_train)
+print('Fitting non-linear classifier')
+clf_nolin.fit(X_train, y_train)
 
-    # Clustering score in the groups
-    map_attr = map[3*args.global_points:]
-    gmm.fit(map_attr)
-    p = gmm.predict_proba(map_attr)
-    groups_pred = np.argmax(p, axis=1)
-    groups = ind[3*args.global_points:]
-    #score_attr = metrics.silhouette_score(map_attr, groups_pred, metric='euclidean')
-    score_attr.append(gmm.score(map_attr))
-    #print('Clustering score on attributes: ' + str(score_attr))
-
-    # Clustering score in the random batches
-    #score_rnd = metrics.adjusted_rand_score(groups_pred, groups)
-    map_rnd = map[:3*args.global_points]
-    gmm.fit(map_rnd)
-    p = gmm.predict_proba(map_rnd)
-    groups_pred = np.argmax(p, axis=1)
-    groups = ind[:3*args.global_points]
-    #score_rnd = metrics.silhouette_score(map_rnd, groups_pred, metric='euclidean')
-    score_rnd.append(gmm.score(map_rnd))
-    #print('Clustering score on random batches: ' + str(score_rnd))
-
-
-plt.figure(figsize=(5, 5))
-plt.plot(ncomp, score_attr, 's-', label='Grouped data')
-plt.plot(ncomp, score_rnd, 's:', label='Random data')
-plt.xlabel('Components')
-plt.ylabel('Log-likelihood')
-plt.grid()
-plt.legend(loc='best')
-plt.savefig(folder + 'gmm.pdf')
+print('Train accuracy on linear SVM: ' + str(100*clf_lin.score(X_train, y_train)))          # 100.0 in groups, 0.9475 including random as class
+print('Test accuracy on linear SVM: ' + str(100*clf_lin.score(X_test, y_test)))             # 95.0 in groups, 0.8 including random as class
+print('Train accuracy on non-linear SVM: ' + str(100*clf_nolin.score(X_train, y_train)))    # 100.0 in groups, 0.955 including random as class
+print('Test accuracy on non-linear SVM: ' + str(100*clf_nolin.score(X_test, y_test)))       # 97.5 in groups, 0.77 including random as class
 
 

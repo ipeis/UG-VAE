@@ -7,22 +7,22 @@ from torchvision.utils import save_image
 from torch.distributions import MultivariateNormal as Normal
 
 ########################################################################################################################
-parser = argparse.ArgumentParser(description='Train GGMVAE')
-parser.add_argument('--dim_z', type=int, default=10, metavar='N',
+parser = argparse.ArgumentParser(description='Train UG-VAE')
+parser.add_argument('--dim_z', type=int, default=20, metavar='N',
                     help='Dimensions for local latent')
-parser.add_argument('--dim_beta', type=int, default=20, metavar='N',
+parser.add_argument('--dim_beta', type=int, default=50, metavar='N',
                     help='Dimensions for global latent')
-parser.add_argument('--L', type=int, default=2, metavar='N',
+parser.add_argument('--K', type=int, default=20, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
-parser.add_argument('--dataset', type=str, default='mnist_clean_corrupted_batch',
+parser.add_argument('--dataset', type=str, default='celeba',
                     help='Name of the dataset')
-parser.add_argument('--arch', type=str, default='k_vae',
+parser.add_argument('--arch', type=str, default='beta_vae',
                     help='Architecture for the model')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--epochs', type=int, default=500, metavar='N',
+parser.add_argument('--epochs', type=int, default=50, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--save_each', type=int, default=1, metavar='N',
                     help='save model and figures each _ epochs (default: 10)')
@@ -32,7 +32,7 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--model_name', type=str, default='UG-VAE/mnist_clean_corrupted_batch',
+parser.add_argument('--model_name', type=str, default='UG-VAE/celeba',
                     help='name for the model to be saved')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -57,48 +57,23 @@ if os.path.isdir('results/' + model_name + '/figs/samples/') == False:
     os.makedirs('results/' + model_name + '/figs/samples/')
 
 
-#kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 
 ########################################################################################################################
-if args.dataset=='mnist_series':
-    assert (args.dataset=='mnist_series' and args.batch_size == 128), 'mnist_series dataset is only for batches of 128 images.'
-
 data_tr, _,  data_test = get_data(args.dataset)
-
-"""
-if dataset=='celebA':
-
-    data_tr = CelebA('./data/', split="train",
-                     transform=transforms.ToTensor(), download=False)   #download=True for downloading the dataset
-    data_test = CelebA('./data/', split="test",
-                       transform=transforms.ToTensor(), download=False)
-if dataset=='mnist':
-    data_tr = datasets.MNIST('../data', train=True, download=True,
-                   transform=transforms.ToTensor())
-    data_test = datasets.MNIST('../data', train=False, download=True,
-                   transform=transforms.ToTensor())
-"""
-
-if args.dataset == 'mnist_series' or args.dataset == 'mnist_svhn_series':
-    batch_size = 1
-else:
-    batch_size = args.batch_size
-
-train_loader = torch.utils.data.DataLoader(data_tr, batch_size = batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(data_test, batch_size = batch_size, shuffle=True)
+train_loader = torch.utils.data.DataLoader(data_tr, batch_size = args.batch_size, shuffle=True)
+test_loader = torch.utils.data.DataLoader(data_test, batch_size = args.batch_size, shuffle=True)
 ########################################################################################################################
 
 
 dim_z = args.dim_z
 dim_beta = args.dim_beta
-L = args.L
+K = args.K
 var_x = args.var_x
 
-distribution = 'gaussian'
 nchannels = nchannels[args.dataset]
 
 
-model = GGMVAE5(channels=nchannels, dim_z=dim_z, dim_beta=dim_beta, L=L, var_x=var_x, arch=args.arch, device=device).to(device)
+model = UGVAE(channels=nchannels, dim_z=dim_z, dim_beta=dim_beta, K=K, var_x=var_x, arch=args.arch, device=device).to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=5e-3)
 
@@ -117,14 +92,9 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
     train_kld = 0
     train_klbeta = 0
     nims = len(train_loader.dataset)
-    if args.dataset=='mnist_svhn' or args.dataset=='mnist_svhn_batch' or args.dataset=='mnist_clean_corrupted_batch' or args.dataset=='celeba_faces' or args.dataset=='celeba_faces_batch' or args.dataset=='celeba_lfw':
+    if  args.dataset=='celeba_faces':
         #Reset loader each epoch
         data_tr.reset()
-        #train_loader = torch.utils.data.DataLoader(data_tr, batch_size=args.batch_size, shuffle=True)
-    elif args.dataset=='mnist_series' or args.dataset=='mnist_svhn_series':
-        data_tr.reset()
-        nims = data_tr.nbatches * data_tr.batch_size
-
 
     for batch_idx, (data, _) in enumerate(train_loader):
         data = data.to(device).view(-1, nchannels, data.shape[-2], data.shape[-1])
@@ -144,11 +114,16 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
                        100. * batch_idx / len(train_loader),
                        loss.item() / len(data)))
 
-    print('====> Epoch: {} Average loss: {:.4f}'.format(
-        epoch, train_loss / nims))
+    train_loss /= nims
+    train_rec /= nims
+    train_klz /= nims
+    train_kld /= nims
+    train_klbeta /= nims
 
-    return train_loss / nims, train_rec / nims, \
-           train_klz / nims, train_kld / nims, train_klbeta / nims
+    print('====> Epoch: {} Average loss: {:.4f}'.format(
+        epoch, train_loss))
+
+    return train_loss, train_rec, train_klz, train_kld, train_klbeta
 
 
 def test(model, epoch, test_loader, cuda=False, model_name='model'):
@@ -162,13 +137,10 @@ def test(model, epoch, test_loader, cuda=False, model_name='model'):
     test_klbeta = 0
     nims = len(test_loader.dataset)
     with torch.no_grad():
-        if args.dataset == 'mnist_svhn' or args.dataset=='mnist_svhn_batch' or args.dataset=='mnist_clean_corrupted_batch' or args.dataset=='celeba_faces' or args.dataset=='celeba_faces_batch' or args.dataset=='celeba_lfw':
+        if args.dataset=='celeba_faces':
             # Reset loader each epoch
             data_test.reset()
-            #test_loader = torch.utils.data.DataLoader(data_test, batch_size=args.batch_size, shuffle=True)
-        elif args.dataset=='mnist_series' or args.dataset=='mnist_svhn_series':
-            data_test.reset()
-            nims = data_test.nbatches * data_test.batch_size
+
         for i, (data, _) in enumerate(test_loader):
             data = data.to(device).view(-1, nchannels, data.shape[-2], data.shape[-1])
             mu_x, mu_z, var_z, mus_z, vars_z, mu_beta, var_beta, pi = model(data)
@@ -199,7 +171,7 @@ def test(model, epoch, test_loader, cuda=False, model_name='model'):
 
 
 
-def plot_losses(model, tr_losses, test_losses, tr_recs, test_recs,
+def plot_losses(tr_losses, test_losses, tr_recs, test_recs,
                 tr_klzs, test_klzs,
                 tr_klds, test_klds,
                 tr_klbetas, test_klbetas,
@@ -307,14 +279,10 @@ if __name__ == "__main__":
                 samples_z = torch.stack([torch.stack(
                     [Normal(mu_z, torch.diag(var_z)).sample().to(device) for mu_z, var_z in zip(mus_z, vars_z)]) for i
                     in range(64)])  # [64, K, dim_z]
-                samples = [model._decode(samples_z[:, l], sample_beta ) for l in range(L)]
-                [save_image(samples[l],
-                            'results/' + model_name + '/figs/samples/sample_' + str(epoch) + '_L' + str(l) + '.png') for
-                 l in range(L)]
+                samples = [model._decode(samples_z[:, k], sample_beta ) for k in range(K)]
+                [save_image(samples[k],
+                            'results/' + model_name + '/figs/samples/sample_' + str(epoch) + '_L' + str(k) + '.png') for
+                 k in range(K)]
                 plt.close('all')
 
                 save_model(model, epoch, model_name=model_name)
-                #plot_latent(model, epoch, test_loader, cuda=args.cuda, model_name=model_name)
-                #plot_global_latent(model, epoch, nsamples=4, nreps=1000, nims=20, cuda=args.cuda, model_name=model_name)
-
-

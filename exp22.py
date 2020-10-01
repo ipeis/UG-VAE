@@ -1,221 +1,179 @@
 
 
-from torch import nn
-from datasets import *
-import os
 from models import *
+import argparse
+from torchvision import datasets, transforms
+from torch import nn, optim
+from datasets import *
 from torchvision.utils import save_image
+from sklearn.decomposition import KernelPCA
+from sklearn.manifold import TSNE
+from sklearn import metrics
+from sklearn import mixture
 
 
-class MNISTclsf(nn.Module):
-    def __init__(self):
-        super(MNISTclsf, self).__init__()
-        self.logits = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=5),
-            nn.ReLU(),
-            nn.Conv2d(32, 32, kernel_size=5),
-            nn.MaxPool2d(2),
-            nn.ReLU(),
-            nn.Dropout(),
-            nn.Conv2d(32, 64, kernel_size=5),
-            nn.MaxPool2d(2),
-            nn.ReLU(),
-            nn.Dropout(),
-            View((-1, 3 * 3 * 64)),
-            nn.Linear(3 * 3 * 64, 256),
-            nn.ReLU(),
-            nn.Dropout(),
-            nn.Linear(256, 10)
-        )
-        self.predictor = nn.LogSoftmax(dim=1)
 
-    def forward(self, x):
-            logits = self.logits(x)
-            pred = self.predictor(logits)
-            return pred
+class Interpolation():
+
+    def __init__(self, steps):
+        self.steps = steps
+
+    def map_interpolation(self, model, loader, loaders_mix, reps = 100, folder='./', labels_str=None):
 
 
-class View(nn.Module):
-    def __init__(self, size):
-        super(View, self).__init__()
-        self.size = size
+        # mixed data
+        C_map = []
+        labels = []
+        for i, loader_mix in enumerate(loaders_mix):
+            for n in range(reps):
+                batch, _ = iter(loader_mix).next()
+                # Encode
+                mu_x, mu_s, var_s, mu_C, var_C = model(batch)
+                C_map.append(mu_C)
+                labels.append(-i-1)
 
-    def forward(self, tensor):
-        return tensor.view(self.size)
+
+        # grouped data
+        for n in range(reps):
+            batch, l = iter(loader).next()
+            # Encode
+            mu_x, mu_s, var_s, mu_C, var_C = model(batch)
+
+            C_map.append(mu_C)
+            labels.append(l[0])
 
 
-def train_epoch(model, epoch, loader, optimizer, cuda=False):
-    cuda = cuda and torch.cuda.is_available()
-    device = torch.device("cuda" if cuda else "cpu")
-    model.train()
-    train_loss = 0
-    correct = 0
-    for batch_idx, (data, labels) in enumerate(loader):
-        optimizer.zero_grad()
-        probs = model(data)
-        loss = error(probs, labels)
-        loss.backward()
-        optimizer.step()
 
-        # Total correct predictions
-        predicted = torch.max(probs.data, 1)[1]
-        correct += (predicted == labels).sum()
+        # encode two batches (to interpolate between two samples)
+        batch_1, l = iter(loader).next()
+        labels.append(l[0])
+        batch_2, l = iter(loader).next()
+        labels.append(l[0])
 
-        accuracy = float(correct * 100) / float(batch_size * (batch_idx + 1))
-
-        if batch_idx % 50 == 0:
-            print('Epoch : {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\t Accuracy:{:.3f}%'.format(
-                epoch, batch_idx * len(data), len(loader.dataset), 100. * batch_idx / len(loader),
-                loss.item(), accuracy))
-
-    return accuracy
-
-def test(model, loader):
-
-    correct = 0
-    for data, labels in loader:
-        probs = model(data)
-        predicted = torch.max(probs,1)[1]
-        correct += (predicted == labels).sum()
-
-    accuracy = 100*float(correct) / (len(loader)*batch_size)
-    print("Test accuracy:{:.3f}% ".format( accuracy ))
-    return accuracy
-
-def align_test(model, loader, aligner, beta_global):
-
-    correct = 0
-    for i, (data, labels) in enumerate(loader):
+        folder = 'results/' + name + '/figs/interpolation/' + folder
+        if os.path.isdir(folder) == False:
+            os.makedirs(folder)
 
         # Encode
-        h = aligner.pre_encoder(data)
-        mu_z, var_z = aligner._encode_z(h)
-        pi = aligner._encode_d(mu_z)
-        d = torch.argmax(pi, dim=1)
-        mu_beta, var_beta = aligner._encode_beta(h, pi)
-        beta = aligner.reparameterize(mu_beta, var_beta)
-        mus_z, vars_z = aligner._z_prior(beta)
-        locals = torch.stack([mus_z[di] for di in d])
+        mu_x1, s1, var_s1, C1, var_C1 = model(batch_1)
+        mu_x2, s2, var_s2, C2, var_C2 = model(batch_2)
 
-        # Decode
-        mu_x = aligner._decode(mu_z, beta_global)
+        # Take the first images of each batch
+        s1 = s1[0].unsqueeze(0)
+        s2 = s2[0].unsqueeze(0)
 
-        if i<5:
-
-            folder = 'results/UG-VAE/' + model_name + '/figs/domain_alignment/'
-            if os.path.isdir(folder) == False:
-                os.makedirs(folder)
-
-            comparison = torch.cat([data[:5],
-                                    mu_x[:5]])
-            save_image(comparison.cpu(),
-                       folder + 'example_' + str(i) + '.pdf', nrow=5)
-        probs = model(mu_x)
-        predicted = torch.max(probs,1)[1]
-        correct += (predicted == labels).sum()
-
-    accuracy = 100*float(correct) / (len(loader)*batch_size)
-    print("Test accuracy:{:.3f}% ".format( accuracy ))
-    return accuracy
+        # INTERPOLATION
+        lambda_ = torch.linspace(0, 1, self.steps)
+        C_int = [l * C2 + (1 - l) * C1 for l in lambda_]
+        s_int = [l * s2 + (1 - l) * s1 for l in lambda_]
+        grid = []
+        for i1 in range(self.steps):
+            for i2 in range(self.steps):
+                recon = model._decode(s_int[i2], C_int[i1])
+                grid.append(recon)
+        grid = torch.cat(grid)
+        save_image(grid.cpu(),
+                   folder + 'encoding_interpolation.pdf', nrow=self.steps, padding=1)
 
 
+        # MAP
+        C_map += C_int
+        C_map = torch.stack(C_map)
 
-def save_model(model, epoch, model_name='model'):
-    folder = 'results/' + model_name + '/checkpoints/'
-    if os.path.isdir(folder) == False:
-        os.makedirs(folder)
+        print('Training t-SNE...')
+        C_tsne = TSNE(n_components=2).fit_transform(C_map.detach().numpy())
 
-    torch.save(model.state_dict(), folder + '/checkpoint_' + str(epoch) + '.pth')
-
-
-
-###################################
-###             Args            ###
-###################################
-model_name='mnist_clean_corrupted_batch'     # Name of the model to load
-epoch = 2                  # Which epoch to load the generative model
-train_clsf=False            # Train classifier (True) or don't (False)
-batch_size = 128            # Digits per batch
-epochs = 5                  # Epochs to train the classifier
+        plt.figure(figsize=(6, 6))
 
 
+        markers = ['s', '^']
+        colors = [(52/256, 77/256, 155/256), (53/256, 160/256, 38/256)]
 
-
-###################################
-###          Load data          ###
-###################################
-mnist_tr, _, mnist_test = get_data('mnist')
-_, _, dist_mnist = get_data('corrupted_mnist')
-
-mnist_tr_loader = torch.utils.data.DataLoader(mnist_tr, batch_size = batch_size, shuffle=True)
-mnist_test_loader = torch.utils.data.DataLoader(mnist_test, batch_size = batch_size, shuffle=True)
-dist_mnist_loader = torch.utils.data.DataLoader(dist_mnist, batch_size = batch_size, shuffle=True)
+        if labels_str != None:
+            labels = np.array(labels)
+            for l in range(len(loaders_mix)):
+                ind = labels[l*reps:(l+1)*reps]==-l-1
+                plt.plot(C_tsne[l*reps:(l+1)*reps][ind, 0], C_tsne[l*reps:(l+1)*reps][ind, 1], '.', color=str(0.5+0.1*l), label=labels_str[l])
+            for l in range(2):
+                ind = labels[-reps:]==l
+                plt.plot(C_tsne[-reps:][ind, 0], C_tsne[-reps][ind, 1], 'o', color=colors[l], marker=markers[l],
+                         alpha = 0.7, label=labels_str[l+len(loaders_mix)])
+        else:
+            plt.plot(C_tsne[:, 0], C_tsne[:, 1], 'o')
+        plt.plot(C_tsne[-self.steps, 0], C_tsne[-self.steps, 1], 'ko')
+        plt.plot(C_tsne[-1, 0], C_tsne[-1, 1], 'k>')
+        plt.plot(C_tsne[-self.steps:, 0], C_tsne[-self.steps:, 1], 'k-o', label='Interpolation')
+        plt.legend(loc='best', fontsize=12)
+        plt.grid()
+        plt.savefig(folder + 'interpolation_map.pdf')
 
 
 
-###################################
-###     Train model (or load)   ###
-###################################
-clsf = MNISTclsf()
-if train_clsf==True:
 
-    optimizer = torch.optim.Adam(clsf.parameters())#,lr=0.001, betas=(0.9,0.999))
-    error = nn.CrossEntropyLoss()
+########################################################################################################################
+parser = argparse.ArgumentParser(description='Interpolation')
+parser.add_argument('--dim_s', type=int, default=10, metavar='N',
+                    help='Dimensions for local latent')
+parser.add_argument('--dim_C', type=int, default=20, metavar='N',
+                    help='Dimensions for global latent')
+parser.add_argument('--dataset', type=str, default='celeba_faces_batch',
+                    help='Name of the dataset')
+parser.add_argument('--arch', type=str, default='beta_vae',
+                    help='Architecture for the model')
+parser.add_argument('--steps', type=int, default=7, metavar='N',
+                    help='Number steps in z variable')
+parser.add_argument('--epoch', type=int, default=10,
+                    help='Epoch to load')
+parser.add_argument('--batch_size', type=int, default=128, metavar='N',
+                    help='input batch size for training (default: 128)')
+parser.add_argument('--model_name', type=str, default='MLVAE/celeba_faces',
+                    help='name for the model to be saved')
+args = parser.parse_args()
 
-    for epoch in range(epochs):
-        train_epoch(clsf, epoch+1, mnist_tr_loader, optimizer)
-        test(clsf, mnist_test_loader)
 
-    save_model(clsf, epoch+1, 'MNISTclsf')
+name = args.model_name
+epoch = args.epoch
+steps = args.steps
+dataset = args.dataset
+dim_s = args.dim_s
+dim_C = args.dim_C
 
-else:
-    state_dict = torch.load('results/MNISTclsf/checkpoints/checkpoint_' + str(epochs) + '.pth',
+
+if __name__ == "__main__":
+
+    data, _, _ = get_data(dataset)
+    loader = torch.utils.data.DataLoader(data, batch_size=args.batch_size, shuffle=True)
+
+    ps = [0.5, 0.6, 0.7, 0.8, 0.9]
+    data_mix = []
+    loaders_mix = []
+    for p_ in ps:
+        data_, _, _ = get_data(dataset[:-6], p=p_)
+        data_mix.append(data_)
+        loader_ = torch.utils.data.DataLoader(data_, batch_size=args.batch_size, shuffle=True)
+        loaders_mix.append(loader_)
+
+
+    model = MLVAE(channels=nchannels[args.dataset], dim_s=dim_s, dim_C=dim_C, arch=args.arch)
+    state_dict = torch.load('./results/' + name + '/checkpoints/checkpoint_' + str(epoch) + '.pth',
                             map_location=torch.device('cpu'))
-    clsf.load_state_dict(state_dict)
+    model.load_state_dict(state_dict)
 
+    labels_str = [
+        'mix, 50% CelebA',
+        'mix, 60% CelebA',
+        'mix, 70% CelebA',
+        'mix, 80% CelebA',
+        'mix, 90% CelebA',
+        'celebA',
+        'FACES'
+    ]
+    Interpolation(steps=steps).map_interpolation(model, loader, loaders_mix, reps=100,  folder='epoch_' + str(epoch) + '/',
+                                                 labels_str=['mix 50% celebA',
+                                                             'mix 60% celebA',
+                                                             'mix 70% celebA',
+                                                             'mix 80% celebA',
+                                                             'mix 90% celebA',
+                                                             'celebA', 'FACES'])
 
-######################################################################################
-###                 Compute accuracy for testing MNIST corrupted                      ###
-######################################################################################
-dist_mnist_loader = torch.utils.data.DataLoader(dist_mnist, batch_size = batch_size, shuffle=True)
-accuracy = test(clsf, mnist_test_loader)
-print("Test accuracy for clean-MNIST using clean-MNIST classifier: {:.3f}% ".format( accuracy ))
-# 97.221%
-
-accuracy = test(clsf, dist_mnist_loader)
-print("Test accuracy for corrupted-MNIST using clean-MNIST classifier: {:.3f}% ".format( accuracy ))
-# 51.365%
-
-######################################################################################
-###                         Load global generative model                           ###
-######################################################################################
-
-state_dict = torch.load('results/UG-VAE/' +  model_name + '/checkpoints/checkpoint_' + str(epoch) + '.pth',
-                            map_location=torch.device('cpu'))
-model = GGMVAE5(channels=1, dim_z=10, dim_beta=20, L=10, var_x=2e-1, arch='k_vae')
-model.load_state_dict(state_dict)
-
-
-######################################################################
-###             Compute mean global code for MNIST                 ###
-######################################################################
-
-mnist_beta = []
-for batch_idx, (data, labels) in enumerate(mnist_tr_loader):
-
-    # Encode
-    h = model.pre_encoder(data)
-    mu_z, var_z = model._encode_z(h)
-    pi = model._encode_d(mu_z)
-    mu_beta, var_beta = model._encode_beta(h, pi)
-    mnist_beta.append(mu_beta)
-
-mnist_beta = torch.stack(mnist_beta).mean(dim=0)
-
-
-######################################################################
-###            Decode corrupted MNIST using MNIST global code      ###
-######################################################################
-accuracy = align_test(clsf, dist_mnist_loader, model, mnist_beta)
-print("Test accuracy for corrupted-MNIST using clean-MNIST classifier: {:.3f}% ".format( accuracy ))
 

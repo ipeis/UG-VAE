@@ -18,42 +18,7 @@ class Interpolation():
     def __init__(self, steps):
         self.steps = steps
 
-    def encoding(self, model, batch_1, batch_2, folder='./'):
-
-        folder = 'results/' + name + '/figs/interpolation/' + folder
-        if os.path.isdir(folder) == False:
-            os.makedirs(folder)
-
-        # Encode
-        h1 = model.pre_encoder(batch_1)
-        mu_z1, var_z1 = model._encode_z(h1)
-        pi_1 = model._encode_d(mu_z1)
-        mu_beta1, var_beta1 = model._encode_beta(h1, pi_1)
-
-        h2 = model.pre_encoder(batch_2)
-        mu_z2, var_z2 = model._encode_z(h2)
-        pi_2 = model._encode_d(mu_z2)
-        mu_beta2, var_beta2 = model._encode_beta(h2, pi_2)
-
-        mu_z1 = mu_z1[0]
-        mu_z2 = mu_z2[0].view(-1, mu_z2.shape[-1])
-
-        lambda_ = torch.linspace(0, 1, self.steps)
-        local_int = [l * mu_z2 + (1-l) * mu_z1 for l in lambda_]
-        global_int = [l * mu_beta2 + (1-l) * mu_beta1 for l in lambda_]
-        grid = []
-        for s1 in range(self.steps):
-            for s2 in range(self.steps):
-                recon = model._decode(local_int[s2], global_int[s1])
-                grid.append(recon)
-        grid = torch.cat(grid)
-        #grid = grid.permute(1, 0, 2, 3, 4)
-        #grid = grid.reshape(-1, grid.shape[2], grid.shape[3], grid.shape[4])
-        save_image(grid.cpu(),
-                   folder + 'interpolation.pdf', nrow=steps, padding=1)
-
     def map_interpolation(self, model, loader, loader_mix, reps = 100, folder='./', labels_str=None):
-
 
         # mixed data
         beta_map = []
@@ -68,17 +33,6 @@ class Interpolation():
             beta_map.append(mu_beta)
             labels.append(2)
 
-        # Adjust a GMM to the global space
-        gmm = mixture.GaussianMixture(n_components=2, covariance_type='diag')
-        map_rnd = torch.stack(beta_map).detach().numpy()
-        gmm.fit(map_rnd)
-        p = gmm.predict_proba(map_rnd)
-        groups_pred = np.argmax(p, axis=1)
-        score_rnd = metrics.silhouette_score(map_rnd, groups_pred, metric='euclidean')
-        print('Clustering score on random batches: ' + str(score_rnd))
-
-
-        # grouped data
         for n in range(reps):
             batch, l = iter(loader).next()
             # Encode
@@ -88,14 +42,6 @@ class Interpolation():
             mu_beta, var_beta = model._encode_beta(h, pi)
             beta_map.append(mu_beta)
             labels.append(l[0])
-
-        map_groups = torch.stack(beta_map).detach().numpy()[reps:]
-        gmm.fit(map_groups)
-        p = gmm.predict_proba(map_groups)
-        groups_pred = np.argmax(p, axis=1)
-        groups = labels[reps:]
-        score_groups = metrics.silhouette_score(map_groups, groups_pred, metric='euclidean')
-        print('Clustering score on random batches: ' + str(score_groups))
 
 
         # encode two batches (to interpolate between two samples)
@@ -132,11 +78,8 @@ class Interpolation():
                 recon = model._decode(local_int[s2], global_int[s1])
                 grid.append(recon)
         grid = torch.cat(grid)
-        #grid = grid.permute(1, 0, 2, 3, 4)
-        #grid = grid.reshape(-1, grid.shape[2], grid.shape[3], grid.shape[4])
         save_image(grid.cpu(),
                    folder + 'interpolation.pdf', nrow=steps, padding=1)
-
 
         # MAP
         beta_map += global_int
@@ -146,7 +89,6 @@ class Interpolation():
         beta_tsne = TSNE(n_components=2).fit_transform(beta_map.detach().numpy())
 
         plt.figure(figsize=(6, 6))
-
 
         markers = ['s', '^']
         colors = [(52/256, 77/256, 155/256), (53/256, 160/256, 38/256)]
@@ -175,7 +117,7 @@ parser.add_argument('--dim_z', type=int, default=40, metavar='N',
                     help='Dimensions for local latent')
 parser.add_argument('--dim_beta', type=int, default=40, metavar='N',
                     help='Dimensions for global latent')
-parser.add_argument('--L', type=int, default=40, metavar='N',
+parser.add_argument('--K', type=int, default=40, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
@@ -200,7 +142,7 @@ steps = args.steps
 dataset = args.dataset
 dim_z = args.dim_z
 dim_beta = args.dim_beta
-L = args.L
+K = args.K
 
 if __name__ == "__main__":
 
@@ -211,7 +153,7 @@ if __name__ == "__main__":
     loader_mix = torch.utils.data.DataLoader(data_mix, batch_size=args.batch_size, shuffle=True)
 
 
-    model = GGMVAE5(channels=nchannels[args.dataset], dim_z=dim_z, dim_beta=dim_beta, L=L, arch=args.arch)
+    model = UGVAE(channels=nchannels[args.dataset], dim_z=dim_z, dim_beta=dim_beta, K=K, arch=args.arch)
     state_dict = torch.load('./results/' + name + '/checkpoints/checkpoint_' + str(epoch) + '.pth',
                             map_location=torch.device('cpu'))
     model.load_state_dict(state_dict)

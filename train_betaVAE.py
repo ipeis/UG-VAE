@@ -1,12 +1,11 @@
 from models import *
 import argparse
-from torchvision import datasets, transforms
-from torch import nn, optim
+from torch import optim
 from datasets import *
 from torchvision.utils import save_image
 
 ########################################################################################################################
-parser = argparse.ArgumentParser(description='Train GLVAE')
+parser = argparse.ArgumentParser(description='Train betaVAE')
 parser.add_argument('--dim_z', type=int, default=10, metavar='N',
                     help='dimensions for local latent')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
@@ -29,7 +28,7 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--model_name', type=str, default='betaVAE/mnist',
+parser.add_argument('--model_name', type=str, default='betaVAE/prueba',
                     help='name for results folder')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -54,42 +53,17 @@ if os.path.isdir('results/' + model_name + '/figs/samples/') == False:
     os.makedirs('results/' + model_name + '/figs/samples/')
 
 
-#kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 
 ########################################################################################################################
-if args.dataset=='mnist_series':
-    assert (args.dataset=='mnist_series' and args.batch_size == 128), 'mnist_series dataset is only for batches of 128 images.'
-
 data_tr, _,  data_test = get_data(args.dataset)
-
-"""
-if dataset=='celebA':
-
-    data_tr = CelebA('./data/', split="train",
-                     transform=transforms.ToTensor(), download=False)   #download=True for downloading the dataset
-    data_test = CelebA('./data/', split="test",
-                       transform=transforms.ToTensor(), download=False)
-if dataset=='mnist':
-    data_tr = datasets.MNIST('../data', train=True, download=True,
-                   transform=transforms.ToTensor())
-    data_test = datasets.MNIST('../data', train=False, download=True,
-                   transform=transforms.ToTensor())
-"""
-
-if args.dataset == 'mnist_series':
-    batch_size = 1
-else:
-    batch_size = args.batch_size
-
-train_loader = torch.utils.data.DataLoader(data_tr, batch_size = batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(data_test, batch_size = batch_size, shuffle=True)
+train_loader = torch.utils.data.DataLoader(data_tr, batch_size = args.batch_size, shuffle=True)
+test_loader = torch.utils.data.DataLoader(data_test, batch_size = args.batch_size, shuffle=True)
 ########################################################################################################################
 
 
 dim_z = args.dim_z
 var_x = args.var_x
 
-distribution = distributions[args.dataset]
 nchannels = nchannels[args.dataset]
 
 model = betaVAE(channels=nchannels, dim_z=dim_z, var_x=var_x, arch=args.arch).to(device)
@@ -109,13 +83,6 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
     train_rec = 0
     train_kl_l = 0
     nims = len(train_loader.dataset)
-    if args.dataset=='mnist_svhn':
-        #Reset loader each epoch
-        data_tr.reset()
-        #train_loader = torch.utils.data.DataLoader(data_tr, batch_size=args.batch_size, shuffle=True)
-    elif args.dataset=='mnist_series':
-        data_tr.reset()
-        nims = data_tr.nbatches * data_tr.batch_size
 
     for batch_idx, (data, _) in enumerate(train_loader):
         data = data.to(device).view(-1, nchannels, data.shape[-2], data.shape[-1])
@@ -149,13 +116,7 @@ def test(model, epoch, test_loader, cuda=False, model_name='model'):
     test_kl_l = 0
     nims = len(test_loader.dataset)
     with torch.no_grad():
-        if args.dataset == 'mnist_svhn':
-            # Reset loader each epoch
-            data_test.reset()
-            #test_loader = torch.utils.data.DataLoader(data_test, batch_size=args.batch_size, shuffle=True)
-        elif args.dataset=='mnist_series':
-            data_test.reset()
-            nims = data_test.nbatches * data_test.batch_size
+
         for i, (data, _) in enumerate(test_loader):
             data = data.to(device).view(-1, nchannels, data.shape[-2], data.shape[-1])
             recon_batch, mu, var = model.forward(data)
@@ -257,7 +218,3 @@ if __name__ == "__main__":
                            'results/' + model_name + '/figs/samples/sample_' + str(epoch) + '.png')
                 plt.close('all')
                 save_model(model, epoch, model_name=model_name)
-                #plot_latent(model, epoch, test_loader, cuda=args.cuda, model_name=model_name)
-                #plot_global_latent(model, epoch, nsamples=4, nreps=1000, nims=20, cuda=args.cuda, model_name=model_name)
-
-

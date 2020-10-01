@@ -177,11 +177,11 @@ class Interpolation():
 
 ########################################################################################################################
 parser = argparse.ArgumentParser(description='Interpolation')
-parser.add_argument('--dim_z', type=int, default=10, metavar='N',
+parser.add_argument('--dim_z', type=int, default=20, metavar='N',
                     help='Dimensions for local latent')
 parser.add_argument('--dim_beta', type=int, default=50, metavar='N',
                     help='Dimensions for global latent')
-parser.add_argument('--L', type=int, default=200, metavar='N',
+parser.add_argument('--L', type=int, default=20, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
@@ -191,11 +191,11 @@ parser.add_argument('--arch', type=str, default='beta_vae',
                     help='Architecture for the model')
 parser.add_argument('--steps', type=int, default=7, metavar='N',
                     help='Number steps in z variable')
-parser.add_argument('--epoch', type=int, default=6,
+parser.add_argument('--epoch', type=int, default=17,
                     help='Epoch to load')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--model_name', type=str, default='UG-VAE/celeba_L',
+parser.add_argument('--model_name', type=str, default='UG-VAE/celeba_2000',
                     help='name for the model to be saved')
 args = parser.parse_args()
 
@@ -219,7 +219,7 @@ if __name__ == "__main__":
     batch_1, _ = iter(train_loader).next()
     batch_2, _ = iter(train_loader).next()
 
-    model = GGMVAE5(channels=nchannels[args.dataset], dim_z=dim_z, dim_beta=dim_beta, L=L, arch=args.arch)
+    model = UGVAE(channels=nchannels[args.dataset], dim_z=dim_z, dim_beta=dim_beta, L=L, arch=args.arch)
     state_dict = torch.load('./results/' + name + '/checkpoints/checkpoint_' + str(epoch) + '.pth',
                             map_location=torch.device('cpu'))
     model.load_state_dict(state_dict)

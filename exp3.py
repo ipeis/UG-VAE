@@ -49,7 +49,7 @@ loader = torch.utils.data.DataLoader(data_tr, batch_size=args.batch_size, shuffl
 ########################################################################################################################
 device = 'cpu'
 
-model = GGMVAE5(channels=nchannels[args.dataset], dim_z=args.dim_z, L=args.L, dim_beta=args.dim_beta, arch=args.arch, device=device).to(device)
+model = UGVAE(channels=nchannels[args.dataset], dim_z=args.dim_z, K=args.K, dim_beta=args.dim_beta, arch=args.arch, device=device).to(device)
 
 state_dict = torch.load('results/' + args.model_name + '/checkpoints/checkpoint_' + str(args.epoch) + '.pth',
                         map_location=torch.device('cpu'))

@@ -105,8 +105,8 @@ class MLVAE(nn.Module):
 
     def _local_encode(self, h):
         theta = self.local_encoder(h)
-        mu = theta[:, :self.dim_z]
-        var = torch.exp(torch.tanh(theta[:, self.dim_z:]))
+        mu = theta[:, :self.dim_s]
+        var = torch.exp(torch.tanh(theta[:, self.dim_s:]))
 
         return mu, var
 
@@ -142,7 +142,7 @@ class MLVAE(nn.Module):
         return self._decode(s, C), mu_s, var_s, mu_C, var_C
 
     # Reconstruction + KL divergence losses summed over all elements and batch
-    def loss_function(self, recon_x, x, mu_s, var_s, mu_C, var_C, distribution='bernoulli'):
+    def loss_function(self, recon_x, x, mu_s, var_s, mu_C, var_C, distribution='gaussian'):
 
         # BCE = F.binary_cross_entropy(recon_x.view(-1, x.shape[1]*x.shape[2]*x.shape[3]),
         #                             x.view(-1, x.shape[1]*x.shape[2]*x.shape[3]),
@@ -163,7 +163,7 @@ class MLVAE(nn.Module):
 
         KLC = -0.5 * torch.sum(1 + torch.log(var_C) - mu_C.pow(2) - var_C)
 
-        return recogn + KLD + KLG, recogn, KLs, KLC
+        return recogn + KLs + KLC, recogn, KLs, KLC
 
 
 
@@ -172,14 +172,14 @@ class MLVAE(nn.Module):
 
 class UGVAE(nn.Module):
     # This model is a GGMVAE in the local space, where the noise come from the global space∫
-    def __init__(self, channels, dim_z, dim_beta, L, var_x=0.1, arch='beta_vae', device='cpu'):
+    def __init__(self, channels, dim_z, dim_beta, K, var_x=0.1, arch='beta_vae', device='cpu'):
         super(UGVAE, self).__init__()
 
         self.dim_z = dim_z
         self.dim_beta = dim_beta
-        self.L = L
+        self.K = K
         self.var_x=var_x
-        self.pi_d = torch.ones(1, L) / L
+        self.pi_d = torch.ones(1, K) / K
         self.device = device
 
         # Architecture from beta_vae
@@ -235,51 +235,21 @@ class UGVAE(nn.Module):
                 View((-1, channels, 28, 28))
             )
 
-        elif arch == 'CNN_svhn': # from https://www.kaggle.com/sdelecourt/cnn-with-pytorch-for-mnist
-            # Encoder
-            self.pre_encoder = nn.Sequential(
-                nn.Conv2d(channels, 32, 4, 2, 1),  # B,  32, 16, 16
-                nn.BatchNorm2d(32),
-                nn.ReLU(True),
-                nn.Conv2d(32, 64, 4, 2, 1),  # B,  64,  8,  8
-                nn.BatchNorm2d(64),
-                nn.ReLU(True),
-                nn.Conv2d(64, 64, 4, 2, 1),  # B,  64,  4,  4
-                nn.BatchNorm2d(64),
-                nn.ReLU(True),
-                nn.Conv2d(64, 256, 4, 1),  # B, 256,  1,  1
-                nn.BatchNorm2d(256),
-                nn.ReLU(True),
-            )
-            self.decoder = nn.Sequential(
-                nn.Linear(dim_z + dim_beta, 256),  # B, 256
-                View((-1, 256, 1, 1)),  # B, 256,  1,  1
-                nn.ReLU(True),
-                nn.ConvTranspose2d(256, 64, 4),  # B,  64,  4,  4
-                nn.ReLU(True),
-                nn.ConvTranspose2d(64, 64, 4, 2, 1),  # B,  64,  8,  8
-                nn.ReLU(True),
-                nn.ConvTranspose2d(64, 32, 4, 2, 1),  # B,  32, 16, 16
-                nn.ReLU(True),
-                nn.ConvTranspose2d(32, channels, 4, 2, 1),  # B, nc, 64, 64
-                nn.Sigmoid()
-            )
-
         self.encoder_z = nn.Sequential(
             View((-1, 256)),  # B, 256
             nn.Linear(256, dim_z * 2),  # B, dim_z*2
         )
 
         self.encoder_beta = nn.Sequential(
-            View((-1, 256+L)),  # B, 256
-            nn.Linear(256+L, dim_beta * 2),  # B, dim_beta*2
+            View((-1, 256+K)),  # B, 256
+            nn.Linear(256+K, dim_beta * 2),  # B, dim_beta*2
         )
 
         self.encoder_d = nn.Sequential(
             # View((-1, dim_beta+dim_w)),  # B, dim_beta+dim_w
             nn.Linear(dim_z, 256),  # B, 256
             nn.Tanh(),
-            nn.Linear(256, L),  # B, K
+            nn.Linear(256, K),  # B, K
             #StableSofmax(L)
             nn.Softmax(dim=1)
         )
@@ -292,7 +262,7 @@ class UGVAE(nn.Module):
                 # nn.ReLU(True),
                 nn.Linear(256, dim_z * 2)
             )
-            for l in range(L)])
+            for k in range(K)])
 
     def gaussian_prod(self, mus, logvars):
 
@@ -328,9 +298,9 @@ class UGVAE(nn.Module):
         return mu + eps*std
 
     def _z_prior(self, beta):
-        out = [self.z_prior[l](beta) for l in range(self.L)]
-        mus_z = torch.stack([out[l][:self.dim_z] for l in range(self.L)])
-        vars_z = torch.stack([torch.exp(torch.tanh(out[l][self.dim_z:])) for l in range(self.L)])
+        out = [self.z_prior[k](beta) for k in range(self.K)]
+        mus_z = torch.stack([out[k][:self.dim_z] for k in range(self.K)])
+        vars_z = torch.stack([torch.exp(torch.tanh(out[k][self.dim_z:])) for k in range(self.K)])
         return mus_z, vars_z
 
     def _decode(self, z, beta):
@@ -352,42 +322,11 @@ class UGVAE(nn.Module):
         # Decode
         mu_x = self._decode(z, beta)
 
-
-
-        """
-        # iwae samples
-        for s_iwae in range(S):
-            # for each z
-            for sz in range(S):
-                z = self.reparameterize(mu_z, var_z)
-                pi = self._encode_d(z)
-                mu_beta, var_beta = self._encode_beta(h, pi)
-                # for each beta
-                for sbeta in range(S):
-                    beta = self.reparameterize(mu_beta, var_beta)
-                    mus_z, vars_z = self._z_prior(beta)
-
-                    
-                    # Decode
-                    mu_x = self._decode(z, beta)
-        
-        """
         return mu_x, mu_z, var_z, mus_z, vars_z, mu_beta, var_beta, pi
 
 
     # Reconstruction + KL divergence losses summed over all elements and batch
     def loss_function(self, x, mu_x, mu_z, var_z, mus_z, vars_z, mu_beta, var_beta, pi):
-        """
-        if distribution == 'bernoulli':
-            recogn = F.binary_cross_entropy(mu_x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]),
-                                   x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]),
-                                   reduction='sum')
-        elif distribution == 'gaussian':
-            recogn = F.mse_loss(mu_x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]),
-                                x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]), reduction='sum')
-
-        """
-
 
         # logp() for a multivariate gaussian with diagonal cov
         D = x.shape[-1]*x.shape[-2]     # Dimension of the image
@@ -396,16 +335,6 @@ class UGVAE(nn.Module):
         var_x = torch.ones_like(mu_x) * self.var_x
         cnt = D*np.log(2*np.pi)+torch.sum(torch.log(var_x), dim=-1)
         logp = torch.sum( -0.5 * (cnt + torch.sum((x-mu_x)*var_x**-1*(x-mu_x), dim=-1)) )
-
-        # see Appendix B from VAE paper:
-        # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
-        # https://arxiv.org/abs/1312.6114
-        # KL = -0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-        # which is the same as:
-        # KL = 0.5 * sum(-1 + var + mu^2 - log_var )
-        # for non isotropic priors:
-        # KL(q|p) = 0.5 * sum(-1 + var_p**-1 * var_q + (mu_p-mu_q)**2 * var_p**-1 + log_var_p - log_var_q)
-        # 0.5 * sum(logVar2 - logVar + torch.exp(logVar) + (mu ** 2 / 2 * sigma2 ** 2) - 0.5)
 
         KLz = 0
         l=0
@@ -416,7 +345,7 @@ class UGVAE(nn.Module):
 
         KLbeta = -0.5 * torch.sum(1 + torch.log(var_beta) - mu_beta.pow(2) - var_beta)
 
-        KLd = torch.sum(pi*(torch.log(pi.double()).float()+ torch.log(torch.tensor(self.L, dtype=torch.float).to(self.device)) ))
+        KLd = torch.sum(pi*(torch.log(pi.double()).float()+ torch.log(torch.tensor(self.K, dtype=torch.float).to(self.device)) ))
 
         # To maximize ELBO we minimize loss (-ELBO)
         return -logp + KLz + KLd + KLbeta, -logp, KLz, KLd, KLbeta
@@ -570,7 +499,6 @@ class Expand(nn.Module):
         return tensor.view(new_size)
 
 
-
 class Unsqueeze(nn.Module):
     def __init__(self, N):
         super(Unsqueeze, self).__init__()
@@ -594,12 +522,3 @@ class StableSofmax(nn.Module):
         m = m.repeat(self.dims, 1).t()
         z = x - m
         return torch.softmax(z, dim=1)
-
-
-def normal_logp(x, mu, var):
-
-    D = x.shape[-1]  # Dimension
-    cnt = D * np.log(2 * np.pi) + torch.sum(torch.log(var), dim=-1)
-    logp = torch.sum(-0.5 * (cnt + torch.sum((x - mu) * var ** -1 * (x - mu), dim=-1)))
-
-    return logp
