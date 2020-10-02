@@ -43,16 +43,18 @@ class Interpolation():
             beta_map.append(mu_beta)
             labels.append(l[0])
 
-
-        # encode two batches (to interpolate between two samples)
-        batch_1, l = iter(loader).next()
-        labels.append(l[0])
-        batch_2, l = iter(loader).next()
-        labels.append(l[0])
-
         folder = 'results/' + name + '/figs/interpolation/' + folder
         if os.path.isdir(folder) == False:
             os.makedirs(folder)
+
+        # encode two batches (to interpolate between two samples)
+        batch_1, l = iter(loader).next()
+        save_image(batch_1.squeeze()[:5], folder + 'batch_1.pdf', nrow=5)
+        labels.append(l[0])
+        batch_2, l = iter(loader).next()
+        save_image(batch_2.squeeze()[:5], folder + 'batch_2.pdf', nrow=5)
+        labels.append(l[0])
+
 
         # Encode
         h1 = model.pre_encoder(batch_1)
@@ -106,6 +108,7 @@ class Interpolation():
         plt.plot(beta_tsne[-1, 0], beta_tsne[-1, 1], 'k>')
         plt.plot(beta_tsne[-self.steps:, 0], beta_tsne[-self.steps:, 1], 'k-o', label='Interpolation')
         plt.legend(loc='best', fontsize=12)
+        plt.grid()
         plt.savefig(folder + 'interpolation_map.pdf')
 
 

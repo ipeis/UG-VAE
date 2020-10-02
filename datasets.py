@@ -327,8 +327,8 @@ class CelebAFacesBatch(Dataset):
         self.count += 1
         if self.count == self.batch_size:
             self.count = 0
-            self.k = int(np.round(np.random.uniform(0, 1)))
-            #self.k = 0 if self.k==1 else 1
+            #self.k = int(np.round(np.random.uniform(0, 1)))
+            self.k = 0 if self.k==1 else 1
 
         label = self.k
 
