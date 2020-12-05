@@ -23,6 +23,7 @@ class Interpolation():
         if os.path.isdir(folder) == False:
             os.makedirs(folder)
 
+        # Fixing d
         for k in range(model.K):
             print('Component ' + str(k))
             # Sample
@@ -48,6 +49,34 @@ class Interpolation():
             save_image(grid.cpu(),
                        folder + 'sampling_interpolation_' + str(k) + '.pdf', nrow=self.steps, padding=1)
 
+        # Sampling d
+        # Sample
+        # beta1 = torch.randn(dim_beta)
+        # d = torch.randint(model.L, [1,1])
+        beta1 = torch.squeeze(torch.ones(dim_beta, 1)) * 1.5
+        beta2 = torch.squeeze(torch.ones(dim_beta, 1)) * -1.5
+
+        lambda_ = torch.linspace(0, 1, self.steps)
+        global_int = [l * beta2 + (1 - l) * beta1 for l in lambda_]
+        grid = []
+        comps=''
+        for s1 in range(self.steps):
+            k = np.random.randint(model.K)
+            mus_z, vars_z = model._z_prior(global_int[s1])
+            mu_z = torch.squeeze(mus_z[k])
+            var_z = torch.squeeze(vars_z[k])
+            z1 = torch.squeeze(torch.ones_like(mu_z)) * mu_z - 3
+            z2 = torch.squeeze(torch.ones_like(mu_z)) * mu_z + 3
+            z = torch.stack([l * z2 + (1 - l) * z1 for l in lambda_])
+
+            recon = model._decode(z, global_int[s1])
+            grid.append(recon)
+            comps+=str(k)+'_'
+        grid = torch.cat(grid)
+        save_image(grid.cpu(),
+                   folder + 'sampling_interpolation_' + comps + '.pdf', nrow=self.steps, padding=1)
+
+
 
 
 
@@ -67,11 +96,11 @@ parser.add_argument('--arch', type=str, default='beta_vae',
                     help='Architecture for the model')
 parser.add_argument('--steps', type=int, default=7, metavar='N',
                     help='Number steps in z variable')
-parser.add_argument('--epoch', type=int, default=17,
+parser.add_argument('--epoch', type=int, default=20,
                     help='Epoch to load')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--model_name', type=str, default='UG-VAE/celeba_2000',
+parser.add_argument('--model_name', type=str, default='UG-VAE/celeba',
                     help='name for the model to be saved')
 args = parser.parse_args()
 

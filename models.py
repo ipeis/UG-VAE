@@ -35,6 +35,7 @@ class MLVAE(nn.Module):
                 nn.BatchNorm2d(32),
                 nn.ReLU(True),
                 nn.Conv2d(32, 32, 4, 2, 1),  # B,  32, 16, 16
+                nn.Conv2d(32, 32, 4, 2, 1),  # B,  32, 16, 16
                 nn.BatchNorm2d(32),
                 nn.ReLU(True),
                 nn.Conv2d(32, 64, 4, 2, 1),  # B,  64,  8,  8
@@ -477,6 +478,202 @@ class betaVAE(nn.Module):
         return -logp + beta*KLz, -logp, beta*KLz
 
 
+class GMVAE(nn.Module):
+    # C: global variable
+    # s: local variable
+    def __init__(self, channels, dim_z, dim_w, K, arch='beta_vae', device='cpu'):
+        super(GMVAE, self).__init__()
+
+        self.dim_z = dim_z
+        self.dim_w = dim_w
+        self.K = K
+        self.device = device
+
+
+        # Architecture from beta_vae
+        if arch=='beta_vae':
+            # Encoder
+            self.pre_encoder = nn.Sequential(
+                nn.Conv2d(channels, 32, 4, 2, 1),  # B,  32, 32, 32
+                nn.BatchNorm2d(32),
+                nn.ReLU(True),
+                nn.Conv2d(32, 32, 4, 2, 1),  # B,  32, 16, 16
+                nn.BatchNorm2d(32),
+                nn.ReLU(True),
+                nn.Conv2d(32, 64, 4, 2, 1),  # B,  64,  8,  8
+                nn.BatchNorm2d(64),
+                nn.ReLU(True),
+                nn.Conv2d(64, 64, 4, 2, 1),  # B,  64,  4,  4
+                nn.BatchNorm2d(64),
+                nn.ReLU(True),
+                nn.Conv2d(64, 256, 4, 1),  # B, 256,  1,  1
+                nn.BatchNorm2d(256),
+                nn.ReLU(True),
+            )
+
+            self.z_encoder = nn.Sequential(
+                View((-1, 256 * 1 * 1)),  # B, 256
+                nn.Linear(256, dim_z * 2),  # B, z_dim*2
+            )
+
+            self.w_encoder = nn.Sequential(
+                View((-1, 256 * 1 * 1)),  # B, 256
+                nn.Linear(256, dim_w * 2),  # B, z_dim*2
+            )
+
+            self.decoder = nn.Sequential(
+                nn.Linear(dim_z, 256),  # B, 256
+                View((-1, 256, 1, 1)),  # B, 256,  1,  1
+                nn.ReLU(True),
+                nn.ConvTranspose2d(256, 64, 4),  # B,  64,  4,  4
+                nn.ReLU(True),
+                nn.ConvTranspose2d(64, 64, 4, 2, 1),  # B,  64,  8,  8
+                nn.ReLU(True),
+                nn.ConvTranspose2d(64, 32, 4, 2, 1),  # B,  32, 16, 16
+                nn.ReLU(True),
+                nn.ConvTranspose2d(32, 32, 4, 2, 1),  # B,  32, 32, 32
+                nn.ReLU(True),
+                nn.ConvTranspose2d(32, channels, 4, 2, 1),  # B, nc, 64, 64
+                nn.Sigmoid()
+            )
+
+        # Original architecture in Kingma's VAE
+        elif arch=='k_vae':
+            self.pre_encoder = nn.Sequential(
+                View((-1, channels*784)),
+                nn.Linear(channels*784, 400),
+                nn.ReLU()
+            )
+            self.z_encoder = nn.Sequential(
+                nn.Linear(400, dim_z*2)
+            )
+            self.w_encoder = nn.Sequential(
+                nn.Linear(400, dim_w*2)
+            )
+            self.decoder = nn.Sequential(
+                nn.Linear(dim_z, 400),
+                nn.ReLU(),
+                nn.Linear(400, channels*784),
+                nn.Sigmoid(),
+                View((-1, channels, 28, 28))
+            )
+
+        self.encoder_d = nn.Sequential(
+            # View((-1, dim_beta+dim_w)),  # B, dim_beta+dim_w
+            nn.Linear(dim_z+dim_w, 256),  # B, 256
+            nn.Tanh(),
+            nn.Linear(256, K),  # B, K
+            #StableSofmax(L)
+            nn.Softmax(dim=1)
+        )
+
+        self.z_prior = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(dim_w, 256),  # B, 256
+                nn.ReLU(True),
+                # nn.Linear(256, 256),  # B, 256
+                # nn.ReLU(True),
+                nn.Linear(256, dim_z * 2)
+            )
+            for k in range(K)])
+
+
+    def _encode(self, x):
+        h = self.pre_encoder(x)
+        mu_z, std_z = self._z_encode(h)
+        mu_w, std_w = self._w_encode(h)
+
+        return mu_z, std_z, mu_w, std_w
+
+
+    def _z_encode(self, h):
+        theta = self.z_encoder(h)
+        mu = theta[:, :self.dim_z]
+        var = torch.exp(torch.tanh(theta[:, self.dim_z:]))
+
+        return mu, var
+
+    def _w_encode(self, h):
+        theta = self.w_encoder(h)
+        mu = theta[:, :self.dim_w]
+        var = torch.exp(torch.tanh(theta[:, self.dim_w:]))
+
+        return mu, var
+
+    def _encode_d(self, z, w):
+        
+        input_pi = torch.cat([z, w], dim=1)
+        pi = self.encoder_d(input_pi) + 1e-20 # add a constant to avoid log(0)
+        return pi
+
+
+    def reparameterize(self, mu, var):
+        std = var**0.5
+        eps = torch.randn_like(std)
+        return mu + eps*std
+
+
+    def _z_prior(self, w):
+        out = [self.z_prior[k](w) for k in range(self.K)]
+        mus_z = torch.stack([out[k][:, :self.dim_z] for k in range(self.K)])
+        vars_z = torch.stack([torch.exp(torch.tanh(out[k][:, self.dim_z:])) for k in range(self.K)])
+        return mus_z, vars_z
+
+
+    def _decode(self, z):
+        return self.decoder(z)
+
+
+    def forward(self, x):
+
+        # Encode
+        h = self.pre_encoder(x)
+        mu_z, var_z = self._z_encode(h)
+        z = self.reparameterize(mu_z, var_z)
+        mu_w, var_w = self._w_encode(h)
+        w = self.reparameterize(mu_w, var_w)
+        pi = self._encode_d(z, w)
+        mus_z, vars_z = self._z_prior(w)
+
+        # Decode
+        mu_x = self._decode(z)
+
+        return mu_x, mu_z, var_z, mu_w, var_w, pi, mus_z, vars_z
+
+
+    # Reconstruction + KL divergence losses summed over all elements and batch
+    def loss_function(self, recon_x, x, mu_z, var_z, mu_w, var_w, pi, mus_z, vars_z, distribution='gaussian'):
+
+        # BCE = F.binary_cross_entropy(recon_x.view(-1, x.shape[1]*x.shape[2]*x.shape[3]),
+        #                             x.view(-1, x.shape[1]*x.shape[2]*x.shape[3]),
+        #                             reduction='sum')
+        if distribution == 'bernoulli':
+            recogn = F.binary_cross_entropy(recon_x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]),
+                                            x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]),
+                                            reduction='sum')
+        elif distribution == 'gaussian':
+            recogn = F.mse_loss(recon_x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]),
+                                x.view(-1, x.shape[1] * x.shape[2] * x.shape[3]), reduction='sum')
+
+        # see Appendix B from VAE paper:
+        # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
+        # https://arxiv.org/abs/1312.6114
+        # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+        #KLz = -0.5 * torch.sum(1 + torch.log(var_z) - mu_z.pow(2) - var_z)
+
+        KLz = 0
+        l=0
+        for mu, var in zip(mus_z, vars_z):
+            KLz += ( 0.5 * torch.sum( torch.unsqueeze(pi[:, l], 1) * (- 1 + var**-1 * var_z + (mu-mu_z)**2*var**-1
+                            +torch.log(var) - torch.log(var_z))))
+            l+=1
+
+        KLw = -0.5 * torch.sum(1 + torch.log(var_w) - mu_w.pow(2) - var_w)
+
+        KLd = torch.sum(pi*(torch.log(pi.double()).float()+ torch.log(torch.tensor(self.K, dtype=torch.float).to(self.device)) ))
+
+        return recogn + KLz + KLw + KLd, recogn, KLz, KLw, KLd
+
 
 
 class View(nn.Module):
@@ -506,7 +703,6 @@ class Unsqueeze(nn.Module):
 
     def forward(self, tensor):
         new_size = list(tensor.shape) +  list(torch.ones(self.N))
-        print(new_size)
 
         return tensor.view(new_size)
 

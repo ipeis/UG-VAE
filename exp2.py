@@ -10,7 +10,10 @@ from sklearn.decomposition import KernelPCA
 from sklearn.manifold import TSNE
 from sklearn import metrics
 from sklearn import mixture
-
+from sklearn.svm import SVC
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
 
 
 class Interpolation():
@@ -19,7 +22,7 @@ class Interpolation():
         self.steps = steps
 
     def map_interpolation(self, model, loader, loader_mix, reps = 100, folder='./', labels_str=None):
-
+        """
         # mixed data
         beta_map = []
         labels = []
@@ -43,17 +46,44 @@ class Interpolation():
             beta_map.append(mu_beta)
             labels.append(l[0])
 
+        
+        ########################################################################################################################
+        # Train a classifier over domains, using global latent space
+
+        clf_lin = make_pipeline(StandardScaler(), SVC(kernel='linear', gamma='auto'))
+        clf_nolin = make_pipeline(StandardScaler(), SVC(kernel='rbf', gamma='auto'))
+        X = torch.stack(beta_map).detach().numpy()
+        y = np.concatenate((labels))
+        #X = torch.stack(beta_map[-reps:]).detach().numpy()
+        #y = np.cat(labels[-reps:])
+
+
+        X_train, X_test, y_train, y_test = train_test_split( X, y, test_size=0.2, random_state=42)
+        print('Fitting linear classifier')
+        clf_lin.fit(X_train, y_train)
+        print('Fitting non-linear classifier')
+        clf_nolin.fit(X_train, y_train)
+
+        print('Train accuracy on linear SVM: ' + str(100*clf_lin.score(X_train, y_train)))          #  in groups,  including random as class
+        print('Test accuracy on linear SVM: ' + str(100*clf_lin.score(X_test, y_test)))             #  in groups,  including random as class
+        print('Train accuracy on non-linear SVM: ' + str(100*clf_nolin.score(X_train, y_train)))    #  in groups,  including random as class
+        print('Test accuracy on non-linear SVM: ' + str(100*clf_nolin.score(X_test, y_test)))       #  in groups,  including random as class
+
+        """
+
         folder = 'results/' + name + '/figs/interpolation/' + folder
         if os.path.isdir(folder) == False:
             os.makedirs(folder)
 
         # encode two batches (to interpolate between two samples)
         batch_1, l = iter(loader).next()
-        save_image(batch_1.squeeze()[:5], folder + 'batch_1.pdf', nrow=5)
-        labels.append(l[0])
+        #save_image(batch_1.squeeze()[:5], folder + 'batch_1.pdf', nrow=5)
+        save_image(batch_1[:5], folder + 'batch_1.pdf', nrow=5)
+        #labels.append(l[0])
         batch_2, l = iter(loader).next()
-        save_image(batch_2.squeeze()[:5], folder + 'batch_2.pdf', nrow=5)
-        labels.append(l[0])
+        #save_image(batch_2.squeeze()[:5], folder + 'batch_2.pdf', nrow=5)
+        save_image(batch_2[:5], folder + 'batch_2.pdf', nrow=5)
+        #labels.append(l[0])
 
 
         # Encode
@@ -83,6 +113,7 @@ class Interpolation():
         save_image(grid.cpu(),
                    folder + 'interpolation.pdf', nrow=steps, padding=1)
 
+        """
         # MAP
         beta_map += global_int
         beta_map = torch.stack(beta_map)
@@ -110,31 +141,31 @@ class Interpolation():
         plt.legend(loc='best', fontsize=12)
         plt.grid()
         plt.savefig(folder + 'interpolation_map.pdf')
-
+        """
 
 
 
 ########################################################################################################################
 parser = argparse.ArgumentParser(description='Interpolation')
-parser.add_argument('--dim_z', type=int, default=40, metavar='N',
+parser.add_argument('--dim_z', type=int, default=20, metavar='N',
                     help='Dimensions for local latent')
-parser.add_argument('--dim_beta', type=int, default=40, metavar='N',
+parser.add_argument('--dim_beta', type=int, default=50, metavar='N',
                     help='Dimensions for global latent')
-parser.add_argument('--K', type=int, default=40, metavar='N',
+parser.add_argument('--K', type=int, default=20, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
                     help='Number of components for the Gaussian Global mixture')
-parser.add_argument('--dataset', type=str, default='celeba_faces_batch',
+parser.add_argument('--dataset', type=str, default='cars_3dcars_batch',
                     help='Name of the dataset')
 parser.add_argument('--arch', type=str, default='beta_vae',
                     help='Architecture for the model')
 parser.add_argument('--steps', type=int, default=7, metavar='N',
                     help='Number steps in z variable')
-parser.add_argument('--epoch', type=int, default=10,
+parser.add_argument('--epoch', type=int, default=50,
                     help='Epoch to load')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--model_name', type=str, default='UG-VAE/celeba_faces',
+parser.add_argument('--model_name', type=str, default='UG-VAE/cars_3dcars',
                     help='name for the model to be saved')
 args = parser.parse_args()
 

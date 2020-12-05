@@ -10,19 +10,19 @@ from torch.distributions import MultivariateNormal as Normal
 parser = argparse.ArgumentParser(description='Train UG-VAE')
 parser.add_argument('--dim_z', type=int, default=20, metavar='N',
                     help='Dimensions for local latent')
-parser.add_argument('--dim_beta', type=int, default=50, metavar='N',
+parser.add_argument('--dim_beta', type=int, default=20, metavar='N',
                     help='Dimensions for global latent')
 parser.add_argument('--K', type=int, default=20, metavar='N',
-                    help='Number of components for the Gaussian Global mixture')
+                    help='Number of components for the Gaussian mixture')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
-                    help='Number of components for the Gaussian Global mixture')
-parser.add_argument('--dataset', type=str, default='celeba',
+                    help='Variance of the data')
+parser.add_argument('--dataset', type=str, default='cars_chairs',
                     help='Name of the dataset')
 parser.add_argument('--arch', type=str, default='beta_vae',
                     help='Architecture for the model')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--epochs', type=int, default=50, metavar='N',
+parser.add_argument('--epochs', type=int, default=500, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--save_each', type=int, default=1, metavar='N',
                     help='save model and figures each _ epochs (default: 10)')
@@ -32,7 +32,7 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--model_name', type=str, default='UG-VAE/celeba',
+parser.add_argument('--model_name', type=str, default='UG-VAE/cars_chairs',
                     help='name for the model to be saved')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -92,7 +92,7 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
     train_kld = 0
     train_klbeta = 0
     nims = len(train_loader.dataset)
-    if  args.dataset=='celeba_faces':
+    if args.dataset=='celeba_faces' or args.dataset=='fashionmnist_shoes' or args.dataset=='cars_chairs':
         #Reset loader each epoch
         data_tr.reset()
 
@@ -137,7 +137,7 @@ def test(model, epoch, test_loader, cuda=False, model_name='model'):
     test_klbeta = 0
     nims = len(test_loader.dataset)
     with torch.no_grad():
-        if args.dataset=='celeba_faces':
+        if args.dataset=='celeba_faces' or args.dataset=='fashionmnist_shoes' or args.dataset=='cars_chairs':
             # Reset loader each epoch
             data_test.reset()
 
@@ -268,7 +268,7 @@ if __name__ == "__main__":
                 'test_klbetas': test_klbetas
             }
             np.save('results/' + model_name + '/checkpoints/losses', losses)
-            plot_losses(model, tr_losses, test_losses, tr_recs, test_recs,
+            plot_losses(tr_losses, test_losses, tr_recs, test_recs,
                         tr_klzs, test_klzs, tr_klds, test_klds,
                         tr_klbetas, test_klbetas,
                         model_name=model_name)

@@ -36,42 +36,6 @@ class CelebA(Dataset):
         return Subset(self, self.tr_idx), Subset(self, self.val_idx), Subset(self, self.test_idx)
 
 
-class Mnist_Usps(Dataset):
-
-    def __init__(self, path='./data/', split='train'):
-
-        self.path = path
-        self.mnist= datasets.MNIST(path, train=split=='train', download=True,
-                                       transform= transforms.ToTensor())
-        self.usps = datasets.USPS(path, train=split=='train', download=True,
-                        transform=transforms.ToTensor())
-
-        self.mnist_loader = iter(torch.utils.data.DataLoader( self.mnist, batch_size=1, shuffle=True))
-        self.usps_loader = iter(torch.utils.data.DataLoader( self.usps, batch_size=1, shuffle=True))
-
-        self.nims = int(0.9 * (self.mnist.__len__() + self.usps.__len__()) )
-
-    def __getitem__(self, index):
-
-        k = int(np.round(np.random.uniform(0, 1)))
-        if k == 0:
-            image, label = self.mnist_loader.next()
-        else:
-            image, label = self.usps_loader.next()
-
-        label = torch.cat([label, torch.tensor([k])])
-        print(image.shape)
-        return image.view(1, 28, 28), label
-
-    def __len__(self):
-        return self.nims
-
-    def reset(self):
-        self.mnist_loader = iter(torch.utils.data.DataLoader(self.mnist, batch_size=1, shuffle=True))
-        self.usps_loader = iter(torch.utils.data.DataLoader(self.usps, batch_size=1, shuffle=True))
-
-
-
 class DigitSampler(torch.utils.data.sampler.Sampler):
     def __init__(self, mask, data_source):
         self.mask = mask
@@ -408,6 +372,494 @@ class CelebANonAttribute(Dataset):
         return self.nsamples
 
 
+class FashionMnistShoes(Dataset):
+    def __init__(self, path='./data/', split='train', p=0.5):
+
+        self.path = path
+        self.p = p
+        self.fashionmnist = datasets.FashionMNIST(path, train=split == 'train', download=True,
+                                                  transform=transforms.Compose([
+                                                      transforms.Resize((64, 64)),
+                                                      # transforms.Lambda(lambda image: image.convert('RGB')),
+                                                      transforms.ToTensor()]))
+
+        self.shoes = datasets.ImageFolder(path + 'shoes/', transform=transforms.Compose([
+                                                    #transforms.Resize((28, 28)),
+                                                    transforms.Grayscale(),
+                                                    transforms.ToTensor()]))
+
+
+        self.fashionmnist_loader = iter(torch.utils.data.DataLoader(self.fashionmnist, batch_size=1, shuffle=True))
+        self.shoes_loader = iter(torch.utils.data.DataLoader(self.shoes, batch_size=1, shuffle=True))
+
+
+        self.nims = int(0.9 * (self.fashionmnist.__len__() + self.shoes.__len__()) )
+        self.fcount = 0
+
+    def __getitem__(self, index):
+
+        k = int(np.round(np.random.uniform(0, 1)))
+        if k == 0:
+            image, label = self.fashionmnist_loader.next()
+        else:
+            image, label = self.shoes_loader.next()
+            self.fcount += 1
+            if self.fcount == self.shoes.__len__():
+                self.reset_shoes()
+                self.fcount = 0
+
+        label = torch.cat([label, torch.tensor([k])])
+        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), label
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.fashionmnist_loader = iter(torch.utils.data.DataLoader(self.fashionmnist, batch_size=1, shuffle=True))
+        self.shoes_loader = iter(torch.utils.data.DataLoader(self.shoes, batch_size=1, shuffle=True))
+    def reset_shoes(self):
+        self.shoes_loader = iter(torch.utils.data.DataLoader(self.shoes, batch_size=1, shuffle=True))
+
+
+class FashionMnistShoesBatch(Dataset):
+    def __init__(self, path='./data/', split='train', p=0.5, batch_size=128):
+
+        self.path = path
+        self.p = p
+        self.batch_size = batch_size
+
+        self.fashionmnist = datasets.FashionMNIST(path, train=split=='train', download=True,
+                                 transform=transforms.Compose([
+                                     transforms.Resize((64, 64)),
+                                     #transforms.Lambda(lambda image: image.convert('RGB')),
+                                     transforms.ToTensor()]))
+
+        self.shoes = datasets.ImageFolder(path + 'shoes/', transform=transforms.Compose([
+                                    #transforms.Resize((28, 28)),
+                                    transforms.Grayscale(),
+                                    transforms.ToTensor()]))
+
+        self.fashionmnist_loader = iter(torch.utils.data.DataLoader(self.fashionmnist, batch_size=1, shuffle=True))
+        self.shoes_loader = iter(torch.utils.data.DataLoader(self.shoes, batch_size=1, shuffle=True))
+
+
+        self.nims = int(0.9 * (self.fashionmnist.__len__() + self.shoes.__len__()) )
+        self.count = 0
+        self.k = int(np.round(np.random.uniform(0, 1)))
+        self.fcount = 0
+
+    def __getitem__(self, index):
+
+        if self.k == 0:
+            image, label = self.fashionmnist_loader.next()
+        else:
+            image, label = self.shoes_loader.next()
+            self.fcount += 1
+            if self.fcount == self.shoes.__len__():
+                self.reset_shoes()
+                self.fcount = 0
+
+        self.count += 1
+        if self.count == self.batch_size:
+            self.count = 0
+            # self.k = int(np.round(np.random.uniform(0, 1)))
+            self.k = 0 if self.k == 1 else 1
+
+        label = self.k
+        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), label
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.fashionmnist_loader = iter(torch.utils.data.DataLoader(self.fashionmnist, batch_size=1, shuffle=True))
+        self.shoes_loader = iter(torch.utils.data.DataLoader(self.shoes, batch_size=1, shuffle=True))
+
+    def reset_shoes(self):
+        self.shoes_loader = iter(torch.utils.data.DataLoader(self.shoes, batch_size=1, shuffle=True))
+
+
+class CarsFaces(Dataset):
+
+    def __init__(self, path='./data/', split='train', p=0.5):
+
+        self.path = path
+        self.p = p
+        self.cars = datasets.ImageFolder(path + 'cars/', transform=transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+        self.faces = datasets.ImageFolder(path + 'faces/', transform=transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+
+        if split=='train':
+            self.cars = Subset(self.cars, np.arange(4000))
+            self.faces = Subset(self.faces, np.arange(256))
+        elif split=='test':
+            self.celeba = Subset(self.cars, np.arange(4000, 4500))
+            self.faces = Subset(self.faces, np.arange(256, 265))
+        elif split=='val':
+            self.celeba = Subset(self.cars, np.arange(4500, 4600))
+            self.faces = Subset(self.faces, np.arange(265, 270))
+
+
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+        self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
+
+
+        self.nims = int(0.9 * (self.cars.__len__() + self.faces.__len__()) )
+        self.fcount_cars = 0
+        self.fcount_faces = 0
+
+    def __getitem__(self, index):
+
+        k = int(np.round(np.random.uniform(0, 1)))
+        if k <= self.p:
+            k=0
+        else:
+            k=1
+        if k == 0:
+            image, label = self.cars_loader.next()
+            self.fcount_cars += 1
+            if self.fcount_cars == self.cars.__len__():
+                self.reset_cars()
+                self.fcount_cars = 0
+        else:
+            image, label = self.faces_loader.next()
+            self.fcount_faces += 1
+            if self.fcount_faces == self.faces.__len__():
+                self.reset_faces()
+                self.fcount_faces=0
+
+
+
+        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), k
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+        self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
+    def reset_faces(self):
+        self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
+
+    def reset_cars(self):
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+
+
+class CarsFacesBatch(Dataset):
+
+    def __init__(self, path='./data/', split='train', p=0.5, batch_size=128):
+
+        self.path = path
+        self.p = p
+        self.batch_size=batch_size
+        self.cars = datasets.ImageFolder(path + 'cars/', transform=transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+        self.faces = datasets.ImageFolder(path + 'faces/', transform=transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+
+        if split=='train':
+            self.cars = Subset(self.cars, np.arange(4000))
+            self.faces = Subset(self.faces, np.arange(256))
+        elif split=='test':
+            self.celeba = Subset(self.cars, np.arange(4000, 4500))
+            self.faces = Subset(self.faces, np.arange(256, 265))
+        elif split=='val':
+            self.celeba = Subset(self.cars, np.arange(4500, 4600))
+            self.faces = Subset(self.faces, np.arange(265, 270))
+
+
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+        self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
+
+
+        self.nims = int(0.9 * (self.cars.__len__() + self.faces.__len__()) )
+        self.fcount_cars = 0
+        self.fcount_faces = 0
+        self.count = 0
+        self.k = int(np.round(np.random.uniform(0, 1)))
+
+    def __getitem__(self, index):
+
+        if self.k == 0:
+            image, label = self.cars_loader.next()
+            self.fcount_cars += 1
+            if self.fcount_cars == self.cars.__len__():
+                self.reset_cars()
+                self.fcount_cars = 0
+        else:
+            image, label = self.faces_loader.next()
+            self.fcount_faces += 1
+            if self.fcount_faces == self.faces.__len__():
+                self.reset_faces()
+                self.fcount_faces=0
+        self.count += 1
+        if self.count == self.batch_size:
+            self.count = 0
+            # self.k = int(np.round(np.random.uniform(0, 1)))
+            self.k = 0 if self.k == 1 else 1
+
+
+        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), self.k
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+        self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
+    def reset_faces(self):
+        self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
+
+    def reset_cars(self):
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+
+
+class Cars3dCars(Dataset):
+
+    def __init__(self, path='./data/', split='train', p=0.5):
+
+        self.path = path
+        self.p = p
+        self.cars = datasets.ImageFolder(path + 'cars/', transform=transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+        self.cars3d = datasets.ImageFolder(path + '3dcars/', transform=transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+        self.cars3d_loader = iter(torch.utils.data.DataLoader(self.cars3d, batch_size=1, shuffle=True))
+
+
+        self.nims = int(0.9 * (self.cars.__len__() + self.cars3d.__len__()) )
+        self.fcount_cars = 0
+        self.fcount_cars3d = 0
+
+    def __getitem__(self, index):
+
+        k = int(np.round(np.random.uniform(0, 1)))
+        if k <= self.p:
+            k=0
+        else:
+            k=1
+        if k == 0:
+            image, label = self.cars_loader.next()
+            self.fcount_cars += 1
+            if self.fcount_cars == self.cars.__len__():
+                self.reset_cars()
+                self.fcount_cars = 0
+        else:
+            image, label = self.cars3d_loader.next()
+            self.fcount_cars3d += 1
+            if self.fcount_cars3d == self.cars3d.__len__():
+                self.reset_cars3d()
+                self.fcount_cars3d=0
+
+
+
+        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), k
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+        self.cars3d_loader = iter(torch.utils.data.DataLoader(self.cars3d, batch_size=1, shuffle=True))
+    def reset_cars3d(self):
+        self.cars3d_loader = iter(torch.utils.data.DataLoader(self.cars3d, batch_size=1, shuffle=True))
+
+    def reset_cars(self):
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+
+
+class Cars3dCarsBatch(Dataset):
+
+    def __init__(self, path='./data/', split='train', p=0.5, batch_size=128):
+
+        self.path = path
+        self.p = p
+        self.batch_size=batch_size
+        self.cars = datasets.ImageFolder(path + 'cars/', transform=transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+        self.cars3d = datasets.ImageFolder(path + '3dcars/', transform=transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+        self.cars3d_loader = iter(torch.utils.data.DataLoader(self.cars3d, batch_size=1, shuffle=True))
+
+
+        self.nims = int(0.9 * (self.cars.__len__() + self.cars3d.__len__()) )
+        self.fcount_cars = 0
+        self.fcount_cars3d = 0
+        self.count = 0
+        self.k = int(np.round(np.random.uniform(0, 1)))
+
+    def __getitem__(self, index):
+
+        if self.k == 0:
+            image, label = self.cars_loader.next()
+            self.fcount_cars += 1
+            if self.fcount_cars == self.cars.__len__():
+                self.reset_cars()
+                self.fcount_cars = 0
+        else:
+            image, label = self.cars3d_loader.next()
+            self.fcount_cars3d += 1
+            if self.fcount_cars3d == self.cars3d.__len__():
+                self.reset_cars3d()
+                self.fcount_cars3d=0
+        self.count += 1
+        if self.count == self.batch_size:
+            self.count = 0
+            # self.k = int(np.round(np.random.uniform(0, 1)))
+            self.k = 0 if self.k == 1 else 1
+
+
+        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), self.k
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+        self.cars3d_loader = iter(torch.utils.data.DataLoader(self.cars3d, batch_size=1, shuffle=True))
+    def reset_cars3d(self):
+        self.cars3d_loader = iter(torch.utils.data.DataLoader(self.cars3d, batch_size=1, shuffle=True))
+
+    def reset_cars(self):
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+
+
+class CarsChairs(Dataset):
+
+    def __init__(self, path='./data/', split='train', p=0.5):
+
+        self.path = path
+        self.p = p
+        self.cars = datasets.ImageFolder(path + '3dcars/', transform=transforms.Compose([
+            transforms.CenterCrop(45),
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+        self.chairs = datasets.ImageFolder(path + 'chairs/', transform=transforms.Compose([
+            transforms.CenterCrop(45),
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+        self.chairs_loader = iter(torch.utils.data.DataLoader(self.chairs, batch_size=1, shuffle=True))
+
+
+        self.nims = int(0.9 * (self.cars.__len__() + self.chairs.__len__()) )
+        self.fcount_cars = 0
+        self.fcount_chairs = 0
+
+    def __getitem__(self, index):
+
+        k = int(np.round(np.random.uniform(0, 1)))
+        if k <= self.p:
+            k=0
+        else:
+            k=1
+        if k == 0:
+            image, label = self.cars_loader.next()
+            self.fcount_cars += 1
+            if self.fcount_cars == self.cars.__len__():
+                self.reset_cars()
+                self.fcount_cars = 0
+        else:
+            image, label = self.chairs_loader.next()
+            self.fcount_chairs += 1
+            if self.fcount_chairs == self.chairs.__len__():
+                self.reset_cars()
+                self.fcount_chairs=0
+
+
+
+        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), k
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+        self.chairs_loader = iter(torch.utils.data.DataLoader(self.chairs, batch_size=1, shuffle=True))
+    def reset_chairs(self):
+        self.chairs_loader = iter(torch.utils.data.DataLoader(self.chairs, batch_size=1, shuffle=True))
+
+    def reset_cars(self):
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+
+
+class CarsChairsBatch(Dataset):
+
+    def __init__(self, path='./data/', split='train', p=0.5, batch_size=128):
+
+        self.path = path
+        self.p = p
+        self.batch_size=batch_size
+        self.cars = datasets.ImageFolder(path + '3dcars/', transform=transforms.Compose([
+            transforms.CenterCrop(45),
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+        self.chairs = datasets.ImageFolder(path + 'chairs/', transform=transforms.Compose([
+            transforms.CenterCrop(45),
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(), ]))
+
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+        self.chairs_loader = iter(torch.utils.data.DataLoader(self.chairs, batch_size=1, shuffle=True))
+
+
+        self.nims = int(0.9 * (self.cars.__len__() + self.chairs.__len__()) )
+        self.fcount_cars = 0
+        self.fcount_chairs = 0
+        self.count = 0
+        self.k = int(np.round(np.random.uniform(0, 1)))
+
+    def __getitem__(self, index):
+
+        if self.k == 0:
+            image, label = self.cars_loader.next()
+            self.fcount_cars += 1
+            if self.fcount_cars == self.cars.__len__():
+                self.reset_cars()
+                self.fcount_cars = 0
+        else:
+            image, label = self.chairs_loader.next()
+            self.fcount_chairs += 1
+            if self.fcount_chairs == self.chairs.__len__():
+                self.reset_chairs()
+                self.fcount_chairs=0
+        self.count += 1
+        if self.count == self.batch_size:
+            self.count = 0
+            # self.k = int(np.round(np.random.uniform(0, 1)))
+            self.k = 0 if self.k == 1 else 1
+
+
+        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), self.k
+
+    def __len__(self):
+        return self.nims
+
+    def reset(self):
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+        self.chairs_loader = iter(torch.utils.data.DataLoader(self.chairs, batch_size=1, shuffle=True))
+    def reset_chairs(self):
+        self.chairs_loader = iter(torch.utils.data.DataLoader(self.chairs, batch_size=1, shuffle=True))
+
+    def reset_cars(self):
+        self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
+
+
+
 
 ########################################################################################################################
 
@@ -444,6 +896,14 @@ nchannels = {
     'celeba_faces': 3,
     'faces': 3,
     'celeba_faces_batch': 3,
+    'fashionmnist_shoes': 1,
+    'fashionmnist_shoes_batch': 1,
+    'cars_faces': 3,
+    'cars_faces_batch': 3,
+    'cars_3dcars': 3,
+    'cars_3dcars_batch': 3,
+    'cars_chairs': 3,
+    'cars_chairs_batch': 3
 }
 
 
@@ -516,8 +976,48 @@ def get_data(name, **args):
         data_test = None
         data_val = None
 
+    elif name.lower() == 'fashionmnist_shoes':
+        data_tr = FashionMnistShoes(split='train')
+        data_test = FashionMnistShoes(split='test')
+        data_val = None
+
+    elif name.lower() == 'fashionmnist_shoes_batch':
+        data_tr = FashionMnistShoesBatch(split='train')
+        data_test = FashionMnistShoesBatch(split='test')
+        data_val = None
+
+    elif name.lower() == 'cars_faces':
+        data_tr = CarsFaces(split='train')
+        data_test = CarsFaces(split='test')
+        data_val = None
+
+    elif name.lower() == 'cars_faces_batch':
+        data_tr = CarsFacesBatch(split='train')
+        data_test = CarsFacesBatch(split='test')
+        data_val = None
+
+    elif name.lower() == 'cars_3dcars':
+        data_tr = Cars3dCars(split='train')
+        data_test = Cars3dCars(split='test')
+        data_val = None
+
+    elif name.lower() == 'cars_3dcars_batch':
+        data_tr = Cars3dCarsBatch(split='train')
+        data_test = Cars3dCarsBatch(split='test')
+        data_val = None
+
+    elif name.lower() == 'cars_chairs':
+        data_tr = CarsChairs(split='train')
+        data_test = CarsChairs(split='test')
+        data_val = None
+
+    elif name.lower() == 'cars_chairs_batch':
+        data_tr = CarsChairsBatch(split='train')
+        data_test = CarsChairsBatch(split='test')
+        data_val = None
+        
     else:
-        print('Dataset not valid')
+        print('Dataset ' + name + ' not valid')
         exit()
 
     return data_tr, data_val, data_test

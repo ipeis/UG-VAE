@@ -8,8 +8,12 @@ from torchvision.utils import save_image
 parser = argparse.ArgumentParser(description='Train betaVAE')
 parser.add_argument('--dim_z', type=int, default=20, metavar='N',
                     help='dimensions for local latent')
+parser.add_argument('--dim_w', type=int, default=20, metavar='N',
+                    help='dimensions for local noise latent')
+parser.add_argument('--K', type=int, default=2, metavar='N',
+                    help='Number of components for the Gaussian mixture')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
-                    help='Number of components for the Gaussian Global mixture')
+                    help='Variance of the data')
 parser.add_argument('--dataset', type=str, default='celeba',
                     help='name of the dataset')
 parser.add_argument('--arch', type=str, default='beta_vae',
@@ -28,7 +32,7 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--model_name', type=str, default='betaVAE/celeba',
+parser.add_argument('--model_name', type=str, default='GMVAE/celeba',
                     help='name for results folder')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -62,11 +66,12 @@ test_loader = torch.utils.data.DataLoader(data_test, batch_size = args.batch_siz
 
 
 dim_z = args.dim_z
-var_x = args.var_x
+dim_w = args.dim_w
+K = args.K
 
 nchannels = nchannels[args.dataset]
 
-model = betaVAE(channels=nchannels, dim_z=dim_z, var_x=var_x, arch=args.arch).to(device)
+model = GMVAE(channels=nchannels, dim_z=dim_z, dim_w=dim_w, K=K, arch=args.arch).to(device)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 beta = torch.tensor(args.beta).to(device)
@@ -81,18 +86,26 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
     model.train()
     train_loss = 0
     train_rec = 0
-    train_kl_l = 0
+    train_kl_z = 0
+    train_kl_w = 0
+    train_kl_d = 0
     nims = len(train_loader.dataset)
+
+    if args.dataset=='celeba_faces' or args.dataset=='fashionmnist_shoes':
+        #Reset loader each epoch
+        data_tr.reset()
 
     for batch_idx, (data, _) in enumerate(train_loader):
         data = data.to(device).view(-1, nchannels, data.shape[-2], data.shape[-1])
         optimizer.zero_grad()
-        recon_batch, mu, var = model.forward(data)
-        loss, rec, kl_l = model.loss_function(recon_batch, data, mu, var, beta)
+        recon_batch, mu_z, var_z, mu_w, var_w, pi, muz_z, vars_z = model.forward(data)
+        loss, rec, kl_z, kl_w, kl_d = model.loss_function(recon_batch, data, mu_z, var_z, mu_w, var_w, pi, muz_z, vars_z)
         loss.backward()
         train_loss += loss.item()
         train_rec += rec.item()
-        train_kl_l += kl_l.item()
+        train_kl_z += kl_z.item()
+        train_kl_w += kl_w.item()
+        train_kl_d += kl_d.item()
         optimizer.step()
         if batch_idx % log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
@@ -104,7 +117,7 @@ def train_epoch(model, epoch, train_loader, optimizer, cuda=False, log_interval=
         epoch, train_loss / nims))
 
     return train_loss / nims, train_rec / nims, \
-           train_kl_l / nims
+           train_kl_z / nims, train_kl_w / nims, train_kl_d / nims
 
 
 def test(model, epoch, test_loader, cuda=False, model_name='model'):
@@ -113,17 +126,26 @@ def test(model, epoch, test_loader, cuda=False, model_name='model'):
     model.eval()
     test_loss = 0
     test_rec = 0
-    test_kl_l = 0
+    test_kl_z = 0
+    test_kl_w = 0
+    test_kl_d = 0
     nims = len(test_loader.dataset)
+
+    if args.dataset=='celeba_faces' or args.dataset=='fashionmnist_shoes':
+        #Reset loader each epoch
+        data_test.reset()
+
     with torch.no_grad():
 
         for i, (data, _) in enumerate(test_loader):
             data = data.to(device).view(-1, nchannels, data.shape[-2], data.shape[-1])
-            recon_batch, mu, var = model.forward(data)
-            loss, rec, kl_l = model.loss_function(recon_batch, data, mu, var, beta)
+            recon_batch, mu_z, var_z, mu_w, var_w, pi, muz_z, vars_z = model.forward(data)
+            loss, rec, kl_z, kl_w, kl_d = model.loss_function(recon_batch, data, mu_z, var_z, mu_z, var_w, pi, muz_z, vars_z)
             test_loss += loss.item()
             test_rec += rec.item()
-            test_kl_l += kl_l.item()
+            test_kl_z += kl_z.item()
+            test_kl_w += kl_w.item()
+            test_kl_d += kl_d.item()
 
             if i == 0 and (np.mod(epoch, args.save_each)==0 or epoch==1 or epoch==args.epochs):
                 n = min(data.size(0), 8)
@@ -134,15 +156,17 @@ def test(model, epoch, test_loader, cuda=False, model_name='model'):
 
     test_loss /= nims
     test_rec /= nims
-    test_kl_l /= nims
+    test_kl_z /= nims
+    test_kl_w /= nims
+    test_kl_d /= nims
     print('====> Test set loss: {:.4f}'.format(test_loss))
 
-    return test_loss, test_rec, test_kl_l
+    return test_loss, test_rec, test_kl_z, test_kl_w, test_kl_d
 
 
 
 
-def plot_losses(tr_losses, test_losses, tr_recs, test_recs, tr_kls, test_kls,
+def plot_losses(tr_losses, test_losses, tr_recs, test_recs, tr_klzs, test_klzs, tr_klws, test_klws, tr_klds, test_klds,
                 model_name='model'):
     prop_cycle = plt.rcParams['axes.prop_cycle']
     colors = prop_cycle.by_key()['color']
@@ -151,8 +175,12 @@ def plot_losses(tr_losses, test_losses, tr_recs, test_recs, tr_kls, test_kls,
     plt.semilogy(test_losses, color=colors[0], linestyle=':')
     plt.semilogy(tr_recs, color=colors[1], label='train_rec')
     plt.semilogy(test_recs, color=colors[1], linestyle=':')
-    plt.semilogy(tr_kls, color=colors[2], label='KL_z')
-    plt.semilogy(test_kls, color=colors[2], linestyle=':')
+    plt.semilogy(tr_klzs, color=colors[2], label='KL_z')
+    plt.semilogy(test_klzs, color=colors[2], linestyle=':')
+    plt.semilogy(tr_klws, color=colors[2], label='KL_w')
+    plt.semilogy(test_klws, color=colors[2], linestyle=':')
+    plt.semilogy(tr_klds, color=colors[2], label='KL_d')
+    plt.semilogy(test_klds, color=colors[2], linestyle=':')
     plt.grid()
     plt.xlabel('epoch')
     plt.ylabel('mean loss')
@@ -177,26 +205,32 @@ if __name__ == "__main__":
 
     tr_losses = []
     tr_recs = []
-    tr_kl_ls = []
-    tr_kl_gs = []
+    tr_kl_zs = []
+    tr_kl_ws = []
+    tr_kl_ds = []
     test_losses = []
     test_recs = []
-    test_kl_ls = []
-    test_kl_gs = []
+    test_kl_zs = []
+    test_kl_ws = []
+    test_kl_ds = []
 
     for epoch in range(1, args.epochs + 1):
 
-        tr_loss, tr_rec, tr_kl_l = train_epoch(model, epoch, train_loader, optimizer,
+        tr_loss, tr_rec, tr_kl_z, tr_kl_w, tr_kl_d = train_epoch(model, epoch, train_loader, optimizer,
                                                               cuda=args.cuda, log_interval=args.log_interval)
         tr_losses.append(tr_loss)
         tr_recs.append(tr_rec)
-        tr_kl_ls.append(tr_kl_l)
+        tr_kl_zs.append(tr_kl_z)
+        tr_kl_ws.append(tr_kl_w)
+        tr_kl_ds.append(tr_kl_d)
 
-        test_loss, test_rec, test_kl_l = test(model, epoch, test_loader,
+        test_loss, test_rec, test_kl_z, test_kl_w, test_kl_d = test(model, epoch, test_loader,
                                                                cuda=args.cuda, model_name=model_name)
         test_losses.append(test_loss)
         test_recs.append(test_rec)
-        test_kl_ls.append(test_kl_l)
+        test_kl_zs.append(test_kl_z)
+        test_kl_ws.append(test_kl_w)
+        test_kl_ds.append(test_kl_d)
 
         # Save figures
         with torch.no_grad():
@@ -205,16 +239,27 @@ if __name__ == "__main__":
                 'test_losses': test_losses,
                 'tr_recs': tr_recs,
                 'test_recs': test_recs,
-                'tr_kl_ls': tr_kl_ls,
-                'test_kl_ls': test_kl_ls,
+                'tr_kl_zs': tr_kl_zs,
+                'test_kl_zs': test_kl_zs,
+                'tr_kl_ws': tr_kl_ws,
+                'test_kl_ws': test_kl_ws,
+                'tr_kl_ds': tr_kl_ds,
+                'test_kl_ds': test_kl_ds,
             }
             np.save('results/' + model_name + '/checkpoints/losses', losses)
-            plot_losses(tr_losses, test_losses, tr_recs, test_recs, tr_kl_ls, test_kl_ls,
+            plot_losses(tr_losses, test_losses, tr_recs, test_recs, tr_kl_zs, test_kl_zs, tr_kl_ws, test_kl_ws, tr_kl_ds, test_kl_ds,
                     model_name=model_name)
             if np.mod(epoch, args.save_each)==0 or epoch==1 or epoch==args.epochs:
-                sample_z = torch.randn(64, dim_z).to(device)
-                sample = model._decode(sample_z).cpu()
-                save_image(sample,
-                           'results/' + model_name + '/figs/samples/sample_' + str(epoch) + '.png')
-                plt.close('all')
-                save_model(model, epoch, model_name=model_name)
+                sample_w = torch.randn(64, dim_z).to(device)
+
+                mus_z, vars_z = model._z_prior(sample_w)
+                for k in range(K):
+                    sample_z = model.reparameterize(mus_z[k], vars_z[k]).cpu():
+                    sample = model._decode(sample_z).cpu()
+                    save_image(sample,
+                               'results/' + model_name + '/figs/samples/sample_' + str(epoch) + '.png')
+                    plt.close('all')
+                    save_model(model, epoch, model_name=model_name)
+
+
+
