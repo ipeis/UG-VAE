@@ -4,7 +4,9 @@ paper [Unsupervised Learning of Global Factors in Deep Generative Models](). UG-
 disentanglement from random batches of data in a fully unsupervised manner, which leads to  a promising performance in 
 domain alignment and discovering non-trivial underlying structures.
 
+<br>
 <p align="center">
 <img width="600" src="imgs/UGVAE.png">
 </p>
+<br>
 
