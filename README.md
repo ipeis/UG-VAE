@@ -5,6 +5,6 @@ disentanglement from random batches of data in a fully unsupervised manner, whic
 domain alignment and discovering non-trivial underlying structures.
 
 <p align="center">
-<img width="460" src="imgs/UGVAE.png">
+<img width="600" src="imgs/UGVAE.png">
 </p>
 
