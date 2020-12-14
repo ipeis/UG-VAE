@@ -1,11 +1,14 @@
 
-
+from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 import pandas as pd
-from torch.utils.data import *
+from torch.utils.data import Subset
 import numpy as np
 import torch
 import re
+
+
+#----------------------------------------------------------------------------------------------------------------------#
 
 class CelebA(Dataset):
 
@@ -13,10 +16,8 @@ class CelebA(Dataset):
 
         self.path = path
         self.celeba = datasets.ImageFolder(path, transform)
-
         self.labels = pd.read_csv(self.path + 'list_attr_celeba.txt', sep='\s+', engine='python', header=1).values
         self.labels_keys = pd.read_csv(self.path + 'list_attr_celeba.txt', sep='\s+', engine='python', header=1).keys().values
-
         tr_list = pd.read_csv(self.path + 'list_eval_partition.txt', header=None).values
         partition = np.array([int(i[0][-1]) for i in tr_list])
         self.tr_idx = np.where(partition == 0)[0]
@@ -26,7 +27,6 @@ class CelebA(Dataset):
     def __getitem__(self, index):
         image = self.celeba.__getitem__(index)[0]
         labels = self.labels[index]
-
         return image, labels
 
     def get_label_index(self, label):
@@ -36,7 +36,12 @@ class CelebA(Dataset):
         return Subset(self, self.tr_idx), Subset(self, self.val_idx), Subset(self, self.test_idx)
 
 
-class DigitSampler(torch.utils.data.sampler.Sampler):
+#----------------------------------------------------------------------------------------------------------------------#
+
+class MaskSampler(torch.utils.data.sampler.Sampler):
+    """
+    For obtaining samples from a dataset that accomplish a mask
+    """
     def __init__(self, mask, data_source):
         self.mask = mask
         self.data_source = data_source
@@ -48,9 +53,14 @@ class DigitSampler(torch.utils.data.sampler.Sampler):
         return len(self.data_source)
 
 
-class MnistSeries(Dataset):
-    def __init__(self, path='./data/', split='train', nbatches=200, batch_size=128, offset=0, scale=1):
+#----------------------------------------------------------------------------------------------------------------------#
 
+class MnistSeries(Dataset):
+    """
+    This class build batches from MNIST digits that follow series between [even, odd, fibonacci, primes] numbers
+    """
+    def __init__(self, path='./data/', split='train', nbatches=200, batch_size=128, offset=0, scale=1):
+        # offset and scale to apply transformations to the series
         if split=='train':
             self.nbatches = nbatches
         elif split=='test':
@@ -59,23 +69,17 @@ class MnistSeries(Dataset):
         self.length = int(256)
         even = np.arange(self.length) * 2
         even = even*scale + offset
-        even = split_digits(even)
+        even = self.split_digits(even)
 
         odd = np.arange(self.length) * 2 + 1
         odd = odd*scale + offset
-        odd = split_digits(odd)
+        odd = self.split_digits(odd)
 
         fibonacci = [0, 1]
         for i in range(2, self.length):
             fibonacci.append(fibonacci[i - 1] + fibonacci[i - 2])
         fibonacci = np.array(fibonacci)*scale + offset
-        fibonacci = split_digits(fibonacci)
-
-        primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103,
-                  107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223,
-                  227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283]
-        primes = np.array(primes)*scale + offset
-        primes = split_digits(primes)
+        fibonacci = self.split_digits(fibonacci)
 
         def isPrime(n):
             # see http://www.noulakaz.net/weblog/2007/03/18/a-regular-expression-to-check-for-prime-numbers/
@@ -90,7 +94,7 @@ class MnistSeries(Dataset):
             M += 100                                # increment upper-bound
 
         np.array(primes) * scale + offset
-        primes = split_digits(primes)
+        primes = self.split_digits(primes)
 
         self.series = [
             {'name': 'even',
@@ -112,7 +116,7 @@ class MnistSeries(Dataset):
             mask = [1 if self.mnist[i][1] == n else 0 for i in range(len(self.mnist))]
             mask = torch.tensor(mask)
             ndigits.append(mask.sum())
-            samplers.append(DigitSampler(mask, self.mnist))
+            samplers.append(MaskSampler(mask, self.mnist))
 
             self.loaders.append(torch.utils.data.DataLoader(
                 self.mnist,
@@ -120,21 +124,27 @@ class MnistSeries(Dataset):
                 batch_size=1)
             )
         self.iters = [iter(self.loaders[n]) for n in range(len(self.loaders))]
-        #self.i_s = np.zeros(len(self.series), dtype=int)
         self.i_s = np.array([np.random.randint(0, len(self.series[s]['values'])) for s in range(len(self.series))], dtype=int)
         self.s = np.random.randint(0, len(self.series))
         self.offset = offset
 
+    def split_digits(self, int_list):
+
+        aux = int_list.copy()
+        int_list = []
+        for n in aux:
+            digits = list(map(int, str(n)))
+            int_list += digits
+        int_list = int_list
+
+        return int_list
     def __getitem__(self, index):
 
         # Choose a serie
         s = torch.tensor(np.random.randint(0, len(self.series)))
-
         batch = []
         labels = []
-
         self.i_s = np.array([np.random.randint(0, len(self.series[s]['values'])) for s in range(len(self.series))], dtype=int)
-
         for i in range(self.batch_size):
             index = np.mod(self.i_s[s], self.length)
             n = self.series[s]['values'][index]  # digit
@@ -160,7 +170,7 @@ class MnistSeries(Dataset):
             mask = [1 if self.mnist[i][1] == n else 0 for i in range(len(self.mnist))]
             mask = torch.tensor(mask)
             ndigits.append(mask.sum())
-            samplers.append(DigitSampler(mask, self.mnist))
+            samplers.append(MaskSampler(mask, self.mnist))
 
             self.loaders.append(torch.utils.data.DataLoader(
                 self.mnist,
@@ -171,9 +181,16 @@ class MnistSeries(Dataset):
         self.i_s = np.zeros(len(self.series), dtype=int)
 
 
-class CelebAFaces(Dataset):
+#----------------------------------------------------------------------------------------------------------------------#
 
+class CelebAFaces(Dataset):
+    """
+    This class build mixed batches with images from CelebA and 3D Faces dataset.
+    faces/ and celeba/ folders must be inside the given path.
+    3D FACES -> https://faces.dmi.unibas.ch/bfm/index.php?nav=1-1-1&id=scans
+    """
     def __init__(self, path='./data/', split='train', p=0.5):
+        # p: proportion of images from celebA in each batch
 
         self.path = path
         self.p = p
@@ -183,8 +200,6 @@ class CelebAFaces(Dataset):
         self.faces = datasets.ImageFolder(path + 'faces/', transform=transforms.Compose([
             transforms.Resize((64, 64)),
             transforms.ToTensor(), ]))
-
-
 
         celeba_tr_list = pd.read_csv(self.path+'celeba/' + 'list_eval_partition.txt', header=None).values
         celeba_partition = np.array([int(i[0][-1]) for i in celeba_tr_list])
@@ -202,10 +217,8 @@ class CelebAFaces(Dataset):
             self.celeba = Subset(self.celeba, self.celeba_val_idx)
             self.faces = Subset(self.faces, np.arange(265, 270))
 
-
         self.celeba_loader = iter(torch.utils.data.DataLoader(self.celeba, batch_size=1, shuffle=True))
         self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
-
 
         self.nims = int(0.9 * (self.celeba.__len__() + self.faces.__len__()) )
         self.fcount = 0
@@ -234,12 +247,20 @@ class CelebAFaces(Dataset):
     def reset(self):
         self.celeba_loader = iter(torch.utils.data.DataLoader(self.celeba, batch_size=1, shuffle=True))
         self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
+
     def reset_faces(self):
         self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
 
 
-class CelebAFacesBatch(Dataset):
+#----------------------------------------------------------------------------------------------------------------------#
 
+class CelebAFacesBatch(Dataset):
+    """
+    This class randomly select batches from celebA and 3D FACES datasets.
+    For each batch, all the images come from the same dataset.
+    faces/ and celeba/ folders must be inside the given path.
+    3D FACES -> https://faces.dmi.unibas.ch/bfm/index.php?nav=1-1-1&id=scans
+    """
     def __init__(self, path='./data/', split='train', batch_size=128):
 
         self.path = path
@@ -249,10 +270,7 @@ class CelebAFacesBatch(Dataset):
         self.faces = datasets.ImageFolder(path + 'faces/', transform=transforms.Compose([
             transforms.Resize((64, 64)),
             transforms.ToTensor(), ]))
-
-
         self.batch_size = batch_size
-
         celeba_tr_list = pd.read_csv(self.path+'celeba/' + 'list_eval_partition.txt', header=None).values
         celeba_partition = np.array([int(i[0][-1]) for i in celeba_tr_list])
         self.celeba_tr_idx = np.where(celeba_partition == 0)[0]
@@ -269,10 +287,8 @@ class CelebAFacesBatch(Dataset):
             self.celeba = Subset(self.celeba, self.celeba_val_idx)
             self.faces = Subset(self.faces, np.arange(265, 270))
 
-
         self.celeba_loader = iter(torch.utils.data.DataLoader(self.celeba, batch_size=1, shuffle=True))
         self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
-
         self.nims = int(0.8 * (self.celeba.__len__() + self.faces.__len__()) )
         self.count = 0
         self.k = int(np.round(np.random.uniform(0, 1)))
@@ -291,8 +307,8 @@ class CelebAFacesBatch(Dataset):
         self.count += 1
         if self.count == self.batch_size:
             self.count = 0
-            #self.k = int(np.round(np.random.uniform(0, 1)))
-            self.k = 0 if self.k==1 else 1
+            self.k = int(np.round(np.random.uniform(0, 1))) # For random picks
+            #self.k = 0 if self.k==1 else 1 # for switching after batch
 
         label = self.k
 
@@ -304,12 +320,18 @@ class CelebAFacesBatch(Dataset):
     def reset(self):
         self.celeba_loader = iter(torch.utils.data.DataLoader(self.celeba, batch_size=1, shuffle=True))
         self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
+
     def reset_faces(self):
         self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
 
 
-class CelebAttribute(Dataset):
+#----------------------------------------------------------------------------------------------------------------------#
 
+class CelebAttribute(Dataset):
+    """
+    This class builds CelebA batches with a given attribute
+    Attributes must be available in list_attr_celeba.txt inside the path
+    """
     def __init__(self, path='./data/', attr = 0):
 
         self.celeba = datasets.ImageFolder(path, transform=transforms.Compose([
@@ -322,7 +344,7 @@ class CelebAttribute(Dataset):
 
         mask = torch.tensor( [1 if self.labels[i][attr] == 1 else 0 for i in range(len(self.celeba))] )
         self.nsamples = mask.sum()
-        self.sampler = DigitSampler(mask, self.celeba)
+        self.sampler = MaskSampler(mask, self.celeba)
         self.loader = torch.utils.data.DataLoader(
                 self.celeba,
                 sampler=self.sampler,
@@ -340,8 +362,13 @@ class CelebAttribute(Dataset):
         return self.nsamples
 
 
-class CelebANonAttribute(Dataset):
+#----------------------------------------------------------------------------------------------------------------------#
 
+class CelebANonAttribute(Dataset):
+    """
+    This class builds CelebA batches that do not accomplish a given attribute
+    Attributes must be available in list_attr_celeba.txt inside the path
+    """
     def __init__(self, path='./data/', attr = 0):
 
         self.celeba = datasets.ImageFolder(path, transform=transforms.Compose([
@@ -354,132 +381,30 @@ class CelebANonAttribute(Dataset):
 
         mask = torch.tensor( [1 if self.labels[i][attr] == -1 else 0 for i in range(len(self.celeba))] )
         self.nsamples = mask.sum()
-        self.sampler = DigitSampler(mask, self.celeba)
+        self.sampler = MaskSampler(mask, self.celeba)
         self.loader = torch.utils.data.DataLoader(
                 self.celeba,
                 sampler=self.sampler,
                 batch_size=1)
         self.iter = iter(self.loader)
 
-
     def __getitem__(self, index):
-
         image, label = self.iter.next()
-
         return image, label
 
     def __len__(self):
         return self.nsamples
 
 
-class FashionMnistShoes(Dataset):
-    def __init__(self, path='./data/', split='train', p=0.5):
-
-        self.path = path
-        self.p = p
-        self.fashionmnist = datasets.FashionMNIST(path, train=split == 'train', download=True,
-                                                  transform=transforms.Compose([
-                                                      transforms.Resize((64, 64)),
-                                                      # transforms.Lambda(lambda image: image.convert('RGB')),
-                                                      transforms.ToTensor()]))
-
-        self.shoes = datasets.ImageFolder(path + 'shoes/', transform=transforms.Compose([
-                                                    #transforms.Resize((28, 28)),
-                                                    transforms.Grayscale(),
-                                                    transforms.ToTensor()]))
-
-
-        self.fashionmnist_loader = iter(torch.utils.data.DataLoader(self.fashionmnist, batch_size=1, shuffle=True))
-        self.shoes_loader = iter(torch.utils.data.DataLoader(self.shoes, batch_size=1, shuffle=True))
-
-
-        self.nims = int(0.9 * (self.fashionmnist.__len__() + self.shoes.__len__()) )
-        self.fcount = 0
-
-    def __getitem__(self, index):
-
-        k = int(np.round(np.random.uniform(0, 1)))
-        if k == 0:
-            image, label = self.fashionmnist_loader.next()
-        else:
-            image, label = self.shoes_loader.next()
-            self.fcount += 1
-            if self.fcount == self.shoes.__len__():
-                self.reset_shoes()
-                self.fcount = 0
-
-        label = torch.cat([label, torch.tensor([k])])
-        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), label
-
-    def __len__(self):
-        return self.nims
-
-    def reset(self):
-        self.fashionmnist_loader = iter(torch.utils.data.DataLoader(self.fashionmnist, batch_size=1, shuffle=True))
-        self.shoes_loader = iter(torch.utils.data.DataLoader(self.shoes, batch_size=1, shuffle=True))
-    def reset_shoes(self):
-        self.shoes_loader = iter(torch.utils.data.DataLoader(self.shoes, batch_size=1, shuffle=True))
-
-
-class FashionMnistShoesBatch(Dataset):
-    def __init__(self, path='./data/', split='train', p=0.5, batch_size=128):
-
-        self.path = path
-        self.p = p
-        self.batch_size = batch_size
-
-        self.fashionmnist = datasets.FashionMNIST(path, train=split=='train', download=True,
-                                 transform=transforms.Compose([
-                                     transforms.Resize((64, 64)),
-                                     #transforms.Lambda(lambda image: image.convert('RGB')),
-                                     transforms.ToTensor()]))
-
-        self.shoes = datasets.ImageFolder(path + 'shoes/', transform=transforms.Compose([
-                                    #transforms.Resize((28, 28)),
-                                    transforms.Grayscale(),
-                                    transforms.ToTensor()]))
-
-        self.fashionmnist_loader = iter(torch.utils.data.DataLoader(self.fashionmnist, batch_size=1, shuffle=True))
-        self.shoes_loader = iter(torch.utils.data.DataLoader(self.shoes, batch_size=1, shuffle=True))
-
-
-        self.nims = int(0.9 * (self.fashionmnist.__len__() + self.shoes.__len__()) )
-        self.count = 0
-        self.k = int(np.round(np.random.uniform(0, 1)))
-        self.fcount = 0
-
-    def __getitem__(self, index):
-
-        if self.k == 0:
-            image, label = self.fashionmnist_loader.next()
-        else:
-            image, label = self.shoes_loader.next()
-            self.fcount += 1
-            if self.fcount == self.shoes.__len__():
-                self.reset_shoes()
-                self.fcount = 0
-
-        self.count += 1
-        if self.count == self.batch_size:
-            self.count = 0
-            # self.k = int(np.round(np.random.uniform(0, 1)))
-            self.k = 0 if self.k == 1 else 1
-
-        label = self.k
-        return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), label
-
-    def __len__(self):
-        return self.nims
-
-    def reset(self):
-        self.fashionmnist_loader = iter(torch.utils.data.DataLoader(self.fashionmnist, batch_size=1, shuffle=True))
-        self.shoes_loader = iter(torch.utils.data.DataLoader(self.shoes, batch_size=1, shuffle=True))
-
-    def reset_shoes(self):
-        self.shoes_loader = iter(torch.utils.data.DataLoader(self.shoes, batch_size=1, shuffle=True))
-
+#----------------------------------------------------------------------------------------------------------------------#
 
 class CarsFaces(Dataset):
+    """
+    This class build mixed batches with images from 3D Cars dataset and 3D Faces dataset.
+    3D Cars ->  http://www.cs.toronto.edu/~fidler/projects/CAD.html
+    3D FACES -> https://faces.dmi.unibas.ch/bfm/index.php?nav=1-1-1&id=scans
+    cars/ and faces/ folders must be inside the given path.
+    """
 
     def __init__(self, path='./data/', split='train', p=0.5):
 
@@ -502,11 +427,8 @@ class CarsFaces(Dataset):
             self.celeba = Subset(self.cars, np.arange(4500, 4600))
             self.faces = Subset(self.faces, np.arange(265, 270))
 
-
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
         self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
-
-
         self.nims = int(0.9 * (self.cars.__len__() + self.faces.__len__()) )
         self.fcount_cars = 0
         self.fcount_faces = 0
@@ -530,9 +452,6 @@ class CarsFaces(Dataset):
             if self.fcount_faces == self.faces.__len__():
                 self.reset_faces()
                 self.fcount_faces=0
-
-
-
         return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), k
 
     def __len__(self):
@@ -541,15 +460,24 @@ class CarsFaces(Dataset):
     def reset(self):
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
         self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
+
     def reset_faces(self):
         self.faces_loader = iter(torch.utils.data.DataLoader(self.faces, batch_size=1, shuffle=True))
 
     def reset_cars(self):
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
 
+
+#----------------------------------------------------------------------------------------------------------------------#
 
 class CarsFacesBatch(Dataset):
-
+    """
+    This class randomly select batches from 3D cars and 3D FACES datasets.
+    For each batch, all the images come from the same dataset.
+    3D Cars ->  http://www.cs.toronto.edu/~fidler/projects/CAD.html
+    3D FACES -> https://faces.dmi.unibas.ch/bfm/index.php?nav=1-1-1&id=scans
+    cars/ and faces/ folders must be inside the given path.
+    """
     def __init__(self, path='./data/', split='train', p=0.5, batch_size=128):
 
         self.path = path
@@ -619,9 +547,16 @@ class CarsFacesBatch(Dataset):
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
 
 
-class Cars3dCars(Dataset):
+#----------------------------------------------------------------------------------------------------------------------#
 
-    def __init__(self, path='./data/', split='train', p=0.5):
+class Cars3dCars(Dataset):
+    """
+    This class build mixed batches with images from 3D Cars dataset and 3D Faces dataset.
+    Cars dataset -> https://ai.stanford.edu/~jkrause/cars/car_dataset.html
+    3D Cars ->  http://www.cs.toronto.edu/~fidler/projects/CAD.html
+    cars/ and 3dcars/ folders must be inside the given path.
+    """
+    def __init__(self, path='./data/', p=0.5):
 
         self.path = path
         self.p = p
@@ -631,11 +566,8 @@ class Cars3dCars(Dataset):
         self.cars3d = datasets.ImageFolder(path + '3dcars/', transform=transforms.Compose([
             transforms.Resize((64, 64)),
             transforms.ToTensor(), ]))
-
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
         self.cars3d_loader = iter(torch.utils.data.DataLoader(self.cars3d, batch_size=1, shuffle=True))
-
-
         self.nims = int(0.9 * (self.cars.__len__() + self.cars3d.__len__()) )
         self.fcount_cars = 0
         self.fcount_cars3d = 0
@@ -659,9 +591,6 @@ class Cars3dCars(Dataset):
             if self.fcount_cars3d == self.cars3d.__len__():
                 self.reset_cars3d()
                 self.fcount_cars3d=0
-
-
-
         return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), k
 
     def __len__(self):
@@ -670,6 +599,7 @@ class Cars3dCars(Dataset):
     def reset(self):
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
         self.cars3d_loader = iter(torch.utils.data.DataLoader(self.cars3d, batch_size=1, shuffle=True))
+
     def reset_cars3d(self):
         self.cars3d_loader = iter(torch.utils.data.DataLoader(self.cars3d, batch_size=1, shuffle=True))
 
@@ -677,9 +607,17 @@ class Cars3dCars(Dataset):
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
 
 
-class Cars3dCarsBatch(Dataset):
+#----------------------------------------------------------------------------------------------------------------------#
 
-    def __init__(self, path='./data/', split='train', p=0.5, batch_size=128):
+class Cars3dCarsBatch(Dataset):
+    """
+    This class randomly select batches from Cars and 3D Cars datasets.
+    For each batch, all the images come from the same dataset.
+    Cars dataset -> https://ai.stanford.edu/~jkrause/cars/car_dataset.html
+    3D Cars ->  http://www.cs.toronto.edu/~fidler/projects/CAD.html
+    cars/ and 3dcars/ folders must be inside the given path.
+    """
+    def __init__(self, path='./data/', p=0.5, batch_size=128):
 
         self.path = path
         self.p = p
@@ -693,8 +631,6 @@ class Cars3dCarsBatch(Dataset):
 
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
         self.cars3d_loader = iter(torch.utils.data.DataLoader(self.cars3d, batch_size=1, shuffle=True))
-
-
         self.nims = int(0.9 * (self.cars.__len__() + self.cars3d.__len__()) )
         self.fcount_cars = 0
         self.fcount_cars3d = 0
@@ -720,8 +656,6 @@ class Cars3dCarsBatch(Dataset):
             self.count = 0
             # self.k = int(np.round(np.random.uniform(0, 1)))
             self.k = 0 if self.k == 1 else 1
-
-
         return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), self.k
 
     def __len__(self):
@@ -730,6 +664,7 @@ class Cars3dCarsBatch(Dataset):
     def reset(self):
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
         self.cars3d_loader = iter(torch.utils.data.DataLoader(self.cars3d, batch_size=1, shuffle=True))
+
     def reset_cars3d(self):
         self.cars3d_loader = iter(torch.utils.data.DataLoader(self.cars3d, batch_size=1, shuffle=True))
 
@@ -737,8 +672,15 @@ class Cars3dCarsBatch(Dataset):
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
 
 
-class CarsChairs(Dataset):
+#----------------------------------------------------------------------------------------------------------------------#
 
+class CarsChairs(Dataset):
+    """
+    This class build mixed batches with images from 3D Cars dataset and Chairs dataset.
+    3dCars dataset -> http://www.cs.toronto.edu/~fidler/projects/CAD.html
+    Chairs dataset ->  https://www.di.ens.fr/willow/research/seeing3Dchairs/
+    3dcars/ and chairs/ folders must be inside the given path.
+    """
     def __init__(self, path='./data/', split='train', p=0.5):
 
         self.path = path
@@ -754,8 +696,6 @@ class CarsChairs(Dataset):
 
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
         self.chairs_loader = iter(torch.utils.data.DataLoader(self.chairs, batch_size=1, shuffle=True))
-
-
         self.nims = int(0.9 * (self.cars.__len__() + self.chairs.__len__()) )
         self.fcount_cars = 0
         self.fcount_chairs = 0
@@ -779,9 +719,6 @@ class CarsChairs(Dataset):
             if self.fcount_chairs == self.chairs.__len__():
                 self.reset_cars()
                 self.fcount_chairs=0
-
-
-
         return image.view(image.shape[-3], image.shape[-2], image.shape[-1]), k
 
     def __len__(self):
@@ -790,6 +727,7 @@ class CarsChairs(Dataset):
     def reset(self):
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
         self.chairs_loader = iter(torch.utils.data.DataLoader(self.chairs, batch_size=1, shuffle=True))
+
     def reset_chairs(self):
         self.chairs_loader = iter(torch.utils.data.DataLoader(self.chairs, batch_size=1, shuffle=True))
 
@@ -797,8 +735,16 @@ class CarsChairs(Dataset):
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
 
 
-class CarsChairsBatch(Dataset):
+#----------------------------------------------------------------------------------------------------------------------#
 
+class CarsChairsBatch(Dataset):
+    """
+    This class randomly select batches from 3DCars and Chairs datasets.
+    For each batch, all the images come from the same dataset.
+    3dCars dataset -> http://www.cs.toronto.edu/~fidler/projects/CAD.html
+    Chairs dataset ->  https://www.di.ens.fr/willow/research/seeing3Dchairs/
+    3dcars/ and chairs/ folders must be inside the given path.
+    """
     def __init__(self, path='./data/', split='train', p=0.5, batch_size=128):
 
         self.path = path
@@ -859,33 +805,7 @@ class CarsChairsBatch(Dataset):
         self.cars_loader = iter(torch.utils.data.DataLoader(self.cars, batch_size=1, shuffle=True))
 
 
-
-
-########################################################################################################################
-
-class Distort(object):
-    """Rescale the image in a sample to a given size.
-
-    Args:
-        output_size (tuple or int): Desired output size. If tuple, output is
-            matched to output_size. If int, smaller of image edges is matched
-            to output_size keeping aspect ratio the same.
-    """
-
-    def __init__(self, num_pixels=1):
-        assert isinstance(num_pixels, int)
-        self.num_pixels = num_pixels
-
-    def __call__(self, sample):
-        for n in range(self.num_pixels):
-            sample[0][int(np.random.rand() * 28)][int(np.random.rand() * 28)] = np.random.rand()
-        return sample
-
-
-
-########################################################################################################################
-
-
+#----------------------------------------------------------------------------------------------------------------------#
 nchannels = {
     'celeba': 3,
     'celeba_attribute': 3,
@@ -894,10 +814,7 @@ nchannels = {
     'mnist': 1,
     'mnist_series': 1,
     'celeba_faces': 3,
-    'faces': 3,
     'celeba_faces_batch': 3,
-    'fashionmnist_shoes': 1,
-    'fashionmnist_shoes_batch': 1,
     'cars_faces': 3,
     'cars_faces_batch': 3,
     'cars_3dcars': 3,
@@ -907,39 +824,37 @@ nchannels = {
 }
 
 
-########################################################################################################################
-
-def split_digits(int_list):
-
-    aux = int_list.copy()
-    int_list = []
-    for n in aux:
-        digits = list(map(int, str(n)))
-        int_list+=digits
-    int_list = int_list
-
-    return int_list
-
-
-
-########################################################################################################################
+#----------------------------------------------------------------------------------------------------------------------#
 
 def get_data(name, **args):
+    """
+    Function to obtain a dataset for the experiments in the paper
+    Args:
+        name: name of the dataset
+        **args: possible arguments of the dataset
 
+    Returns: torch.utils.data.Dataset objects with tr/tst/val spits of the selected dataset
+
+    """
+    # For celebA, download the dataset in ./data/celeba/
+    # Put images in ./data/celeba/img/
+    # Put the 'list_attr_celeba.txt' file in ./data/celeba/
     if name.lower()=='celeba':
         data_tr, data_val, data_test = CelebA(path='./data/celeba/',
                                               transform=transforms.Compose([
                                                   transforms.Resize((64, 64)),
                                                   transforms.ToTensor(),])).get_data_tr()
+    # light version of celeba for testing only with 1000 images
     elif name.lower()=='light_celeba':
         data_tr, data_val, data_test = CelebA(path='./data/light_celeba/',
                                               transform=transforms.Compose([
                                                   transforms.Resize((64, 64)),
                                                   transforms.ToTensor(), ])).get_data_tr()
+
     elif name.lower()=='mnist':
-        data_tr = datasets.MNIST('../data', train=True, download=True,
+        data_tr = datasets.MNIST('./data', train=True, download=True,
                                  transform=transforms.ToTensor())
-        data_test = datasets.MNIST('../data', train=False, download=True,
+        data_test = datasets.MNIST('./data', train=False, download=True,
                                    transform=transforms.ToTensor())
         data_val = None
 
@@ -974,16 +889,6 @@ def get_data(name, **args):
     elif name.lower() == 'celeba_nonattribute':
         data_tr = CelebANonAttribute(path='./data/celeba/', attr=args['attr'])
         data_test = None
-        data_val = None
-
-    elif name.lower() == 'fashionmnist_shoes':
-        data_tr = FashionMnistShoes(split='train')
-        data_test = FashionMnistShoes(split='test')
-        data_val = None
-
-    elif name.lower() == 'fashionmnist_shoes_batch':
-        data_tr = FashionMnistShoesBatch(split='train')
-        data_test = FashionMnistShoesBatch(split='test')
         data_val = None
 
     elif name.lower() == 'cars_faces':
