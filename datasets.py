@@ -11,7 +11,11 @@ import re
 #----------------------------------------------------------------------------------------------------------------------#
 
 class CelebA(Dataset):
-
+    """
+    Torchvision dataset implementation of celeba
+    CelebA -> http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html
+    celeba/ folder must be inside the given path.
+    """
     def __init__(self, path='./data/celeba/', transform=None):
 
         self.path = path
@@ -187,6 +191,7 @@ class CelebAFaces(Dataset):
     """
     This class build mixed batches with images from CelebA and 3D Faces dataset.
     faces/ and celeba/ folders must be inside the given path.
+    CelebA -> http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html
     3D FACES -> https://faces.dmi.unibas.ch/bfm/index.php?nav=1-1-1&id=scans
     """
     def __init__(self, path='./data/', split='train', p=0.5):
@@ -259,6 +264,7 @@ class CelebAFacesBatch(Dataset):
     This class randomly select batches from celebA and 3D FACES datasets.
     For each batch, all the images come from the same dataset.
     faces/ and celeba/ folders must be inside the given path.
+    CelebA -> http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html
     3D FACES -> https://faces.dmi.unibas.ch/bfm/index.php?nav=1-1-1&id=scans
     """
     def __init__(self, path='./data/', split='train', batch_size=128):
@@ -330,6 +336,8 @@ class CelebAFacesBatch(Dataset):
 class CelebAttribute(Dataset):
     """
     This class builds CelebA batches with a given attribute
+    CelebA -> http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html
+    celeba/ folder must be inside the given path.
     Attributes must be available in list_attr_celeba.txt inside the path
     """
     def __init__(self, path='./data/', attr = 0):
@@ -367,6 +375,8 @@ class CelebAttribute(Dataset):
 class CelebANonAttribute(Dataset):
     """
     This class builds CelebA batches that do not accomplish a given attribute
+    CelebA -> http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html
+    celeba/ folder must be inside the given path.
     Attributes must be available in list_attr_celeba.txt inside the path
     """
     def __init__(self, path='./data/', attr = 0):
@@ -826,7 +836,7 @@ nchannels = {
 
 #----------------------------------------------------------------------------------------------------------------------#
 
-def get_data(name, **args):
+def get_data(name, path='./data/', **args):
     """
     Function to obtain a dataset for the experiments in the paper
     Args:
@@ -840,21 +850,21 @@ def get_data(name, **args):
     # Put images in ./data/celeba/img/
     # Put the 'list_attr_celeba.txt' file in ./data/celeba/
     if name.lower()=='celeba':
-        data_tr, data_val, data_test = CelebA(path='./data/celeba/',
+        data_tr, data_val, data_test = CelebA(path=path + 'celeba/',
                                               transform=transforms.Compose([
                                                   transforms.Resize((64, 64)),
                                                   transforms.ToTensor(),])).get_data_tr()
     # light version of celeba for testing only with 1000 images
     elif name.lower()=='light_celeba':
-        data_tr, data_val, data_test = CelebA(path='./data/light_celeba/',
+        data_tr, data_val, data_test = CelebA(path=path + 'light_celeba/',
                                               transform=transforms.Compose([
                                                   transforms.Resize((64, 64)),
                                                   transforms.ToTensor(), ])).get_data_tr()
 
     elif name.lower()=='mnist':
-        data_tr = datasets.MNIST('./data', train=True, download=True,
+        data_tr = datasets.MNIST(path, train=True, download=True,
                                  transform=transforms.ToTensor())
-        data_test = datasets.MNIST('./data', train=False, download=True,
+        data_test = datasets.MNIST(path, train=False, download=True,
                                    transform=transforms.ToTensor())
         data_val = None
 
@@ -863,8 +873,8 @@ def get_data(name, **args):
             offset = args['offset']
         else:
             offset = 0
-        data_tr = MnistSeries('./data/', 'train', offset=offset)
-        data_test = MnistSeries('./data/', 'test', offset=offset)
+        data_tr = MnistSeries(path, 'train', offset=offset)
+        data_test = MnistSeries(path, 'test', offset=offset)
         data_val = None
 
     elif name.lower()=='celeba_faces':
@@ -872,53 +882,53 @@ def get_data(name, **args):
             p = args['p']
         else:
             p=0.5
-        data_tr = CelebAFaces('./data/', 'train', p=p)
-        data_test = CelebAFaces('./data/', 'test', p=p)
-        data_val = CelebAFaces('./data/', 'val', p=p)
+        data_tr = CelebAFaces(path, 'train', p=p)
+        data_test = CelebAFaces(path, 'test', p=p)
+        data_val = CelebAFaces(path, 'val', p=p)
 
     elif name.lower()=='celeba_faces_batch':
-        data_tr = CelebAFacesBatch('./data/', 'train')
-        data_test = CelebAFacesBatch('./data/', 'test')
-        data_val = CelebAFacesBatch('./data/', 'val')
+        data_tr = CelebAFacesBatch(path, 'train')
+        data_test = CelebAFacesBatch(path, 'test')
+        data_val = CelebAFacesBatch(path, 'val')
 
     elif name.lower()=='celeba_attribute':
-        data_tr = CelebAttribute(path='./data/celeba/', attr=args['attr'])
+        data_tr = CelebAttribute(path=path + 'celeba/', attr=args['attr'])
         data_test = None
         data_val = None
 
     elif name.lower() == 'celeba_nonattribute':
-        data_tr = CelebANonAttribute(path='./data/celeba/', attr=args['attr'])
+        data_tr = CelebANonAttribute(path=path + 'celeba/', attr=args['attr'])
         data_test = None
         data_val = None
 
     elif name.lower() == 'cars_faces':
-        data_tr = CarsFaces(split='train')
-        data_test = CarsFaces(split='test')
+        data_tr = CarsFaces(path=path, split='train')
+        data_test = CarsFaces(path=path, split='test')
         data_val = None
 
     elif name.lower() == 'cars_faces_batch':
-        data_tr = CarsFacesBatch(split='train')
-        data_test = CarsFacesBatch(split='test')
+        data_tr = CarsFacesBatch(path=path, split='train')
+        data_test = CarsFacesBatch(path=path, split='test')
         data_val = None
 
     elif name.lower() == 'cars_3dcars':
-        data_tr = Cars3dCars(split='train')
-        data_test = Cars3dCars(split='test')
+        data_tr = Cars3dCars(path=path, split='train')
+        data_test = Cars3dCars(path=path, split='test')
         data_val = None
 
     elif name.lower() == 'cars_3dcars_batch':
-        data_tr = Cars3dCarsBatch(split='train')
-        data_test = Cars3dCarsBatch(split='test')
+        data_tr = Cars3dCarsBatch(path=path, split='train')
+        data_test = Cars3dCarsBatch(path=path, split='test')
         data_val = None
 
     elif name.lower() == 'cars_chairs':
-        data_tr = CarsChairs(split='train')
-        data_test = CarsChairs(split='test')
+        data_tr = CarsChairs(path=path, split='train')
+        data_test = CarsChairs(path=path, split='test')
         data_val = None
 
     elif name.lower() == 'cars_chairs_batch':
-        data_tr = CarsChairsBatch(split='train')
-        data_test = CarsChairsBatch(split='test')
+        data_tr = CarsChairsBatch(path=path, split='train')
+        data_test = CarsChairsBatch(path=path, split='test')
         data_val = None
         
     else:

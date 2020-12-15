@@ -1,9 +1,10 @@
+import sys
+sys.path.append('..')
 from datasets import *
 from models import *
 import argparse
 from sklearn.decomposition import KernelPCA
 from sklearn.manifold import TSNE
-from torchvision.utils import save_image
 import matplotlib.pyplot as plt
 import os
 
@@ -11,17 +12,17 @@ import os
 # Arguments
 parser = argparse.ArgumentParser(description='Plot q(beta|x)')
 parser.add_argument('--dim_z', type=int, default=10, metavar='N',
-                    help='Dimensions for local latent z (default: 20)')
+                    help='Dimensions for local latent z (default: 10)')
 parser.add_argument('--dim_beta', type=int, default=20, metavar='N',
                     help='Dimensions for global latent beta (default: 20)')
 parser.add_argument('--K', type=int, default=10, metavar='N',
-                    help='Number of components for the Gaussian mixture (default: 20)')
+                    help='Number of components for the Gaussian mixture (default: 10)')
 parser.add_argument('--var_x', type=float, default=2e-1, metavar='N',
                     help='Variance of p(x|z,beta) (default: 2e-1)')
 parser.add_argument('--arch', type=str, default='k_vae',
                     help='Architecture for the model (default: k_vae)')
-parser.add_argument('--epoch', type=int, default=10,
-                    help='Epoch to load (default: 10)')
+parser.add_argument('--epoch', type=int, default=8,
+                    help='Epoch to load (default: 8)')
 parser.add_argument('--no_cuda', action='store_true', default=False,
                     help='enables CUDA training (default: False)')
 parser.add_argument('--local_points', type=int, default=1000, metavar='N',
@@ -39,19 +40,19 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Load data
-data_tr, _, data_test = get_data('mnist_series')
+data_tr, _, data_test = get_data('mnist_series', path='../data/')
 train_loader = torch.utils.data.DataLoader(data_tr, batch_size=1, shuffle=True)
 test_loader = torch.utils.data.DataLoader(data_test, batch_size=1, shuffle=True)
 
 # Load model
 device = torch.device("cuda" if args.cuda else "cpu")
 model = UGVAE(channels=nchannels['mnist_series'], dim_z=args.dim_z, K=args.K, dim_beta=args.dim_beta, arch=args.arch, device=device).to(device)
-state_dict = torch.load('results/' + args.model_name + '/checkpoints/checkpoint_' + str(args.epoch) + '.pth',
+state_dict = torch.load('../results/' + args.model_name + '/checkpoints/checkpoint_' + str(args.epoch) + '.pth',
                         map_location=torch.device('cpu'))
 model.load_state_dict(state_dict)
 
 # Create subfolder in log dir
-folder = 'results/' + args.model_name + '/figs/maps/epoch_' + str(args.epoch) + '/'
+folder = '../results/' + args.model_name + '/figs/maps/epoch_' + str(args.epoch) + '/'
 if os.path.isdir(folder) == False:
     os.makedirs(folder)
 
@@ -122,7 +123,7 @@ var_g_series = var_g.copy()
 labels_g_series = labels_g.copy()
 
 # Encode random mnist batches
-data_tr, _, data_test = get_data('mnist')
+data_tr, _, data_test = get_data('mnist', path='../data/')
 loader = torch.utils.data.DataLoader(data_tr, batch_size=128, shuffle=True)
 iterator = iter(loader)
 mu_l = []

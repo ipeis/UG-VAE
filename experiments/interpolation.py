@@ -1,5 +1,5 @@
-
-
+import sys
+sys.path.append('..')
 from models import *
 import argparse
 from datasets import *
@@ -57,7 +57,7 @@ class Interpolation():
 
         """
         # Create subfolder in log dir
-        folder = 'results/' + args.model_name + '/figs/interpolation/' + folder
+        folder = '../results/' + args.model_name + '/figs/interpolation/' + folder
         if os.path.isdir(folder) == False:
             os.makedirs(folder)
 
@@ -112,7 +112,7 @@ class Interpolation():
 
         """
         # Create subfolder in log dir
-        folder = 'results/' + args.model_name + '/figs/interpolation/' + folder
+        folder = '../results/' + args.model_name + '/figs/interpolation/' + folder
         if os.path.isdir(folder) == False:
             os.makedirs(folder)
 
@@ -208,7 +208,7 @@ class Interpolation():
 
         """
         # Create subfolder in log dir
-        folder = 'results/' + args.model_name + '/figs/interpolation/' + folder
+        folder = '../results/' + args.model_name + '/figs/interpolation/' + folder
         if os.path.isdir(folder) == False:
             os.makedirs(folder)
 
@@ -244,17 +244,14 @@ class Interpolation():
 if __name__ == "__main__":
 
     # Load data
-    data, _, _ = get_data(args.dataset)
+    data, _, _ = get_data(args.dataset, path='../data/')
     loader = torch.utils.data.DataLoader(data, batch_size=args.batch_size, shuffle=True)
 
     # Load model
     model = UGVAE(channels=nchannels[args.dataset], dim_z=args.dim_z, dim_beta=args.dim_beta, K=args.K, arch=args.arch)
-    state_dict = torch.load('./results/' + args.model_name + '/checkpoints/checkpoint_' + str(args.epoch) + '.pth',
+    state_dict = torch.load('../results/' + args.model_name + '/checkpoints/checkpoint_' + str(args.epoch) + '.pth',
                             map_location=torch.device('cpu'))
     model.load_state_dict(state_dict)
 
     # Perform the interpolation
-    #Interpolation(steps=args.steps).encoding(model, loader, 'epoch_' + str(args.epoch) + '/')
     Interpolation(steps=args.steps).sampling(model, 'epoch_' + str(args.epoch) + '/')
-    #Interpolation(steps=args.steps).map_interpolation(
-    #    model, loader, reps=100,  folder='epoch_' + str(args.epoch) + '/', labels_str=['celeba', 'faces'])

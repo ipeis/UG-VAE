@@ -1,14 +1,12 @@
 # UG-VAE
-This repository contains the official implementation of the Unsupervised Global VAE (**UG-VAE**) model proposed in the 
-paper [Unsupervised Learning of Global Factors in Deep Generative Models](). UG-VAE  learns both local and global 
-disentanglement from random batches of data in a fully unsupervised manner, which leads to  a promising performance in 
-domain alignment and discovering non-trivial underlying structures.
+This repository contains the official Pytorch implementation of the Unsupervised Global VAE (**UG-VAE**) model proposed in the 
+paper [Unsupervised Learning of Global Factors in Deep Generative Models](). 
 
-<br>
-<p align="center">
-<img width="600" src="imgs/exp1.png">
-</p>
-<br>
+
+Please, if you use this code, cite the following [preprint]():
+```
+link
+```
 
 ## Dependencies
 ```
@@ -20,13 +18,81 @@ pandas 1.1.4
 scikit-learn 0.23.2
 ```
 
-## Graphical model
+## Usage
+UGVAE is implemented as a class that inherits from Pytorch <code>nn.Module</code> in <code>models.py</code>. You can train UGVAE using the <code>train.py</code> script. A few examples are included
+below:
+```
+# example for training celeba:
+python3 train.py --dataset celeba --arch beta_vae --epochs 10 --model_name celeba 
+
+# example for training mnist
+python3 train.py --dataset mnist --arch k_vae --dim_z 10 --dim_beta 20 --K 10 --model_name mnist
+
+# example for training mixed celeba+faces
+python3 train.py --dataset celeba_faces --arch beta_vae --dim_z 40 --dim_beta 40 --K 40 --model_name celeba_faces
+```
+This will create a log dir in <code>results/[model_name]</code>. In <code>/checkpoints/</code> model checkpoints for 
+each log interval are stored. In <code>/figs/</code> you will have reconstruction and samples at the end of each 
+log interval, and a plot with the losses of the training procedure. Some remarkable arguments are:
+- <code>--dataset</code>: you can choose among <code>celeba</code>, <code>mnist</code>, <code>celeba_faces</code>, 
+  <code>cars_chairs</code> and some others included in <code>datasets.py</code>
+  For [CelebA](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html), 
+  [3D FACES](https://faces.dmi.unibas.ch/bfm/index.php?nav=1-1-1&id=scans),
+  [Cars dataset](https://ai.stanford.edu/~jkrause/cars/car_dataset.html),
+  and [Chairs](https://www.di.ens.fr/willow/research/seeing3Dchairs/)
+  you have to download from the given links and put the images in <code>data/[dataset]/img/</code>
+- <code>--arch</code>: The architecture for encoder and decoder networks: use <code>beta_vae</code> for convolutional
+  networks that deal with 64x64 images (as CelebA), or <code>k_vae</code> for FC networks that deal with 28x28 images (as MNIST). 
+- <code>--model_name</code> will be the name of the logdir stored in <code>results/</code> folder.
+- <code>--no_cuda</code> for disabling GPU training.
+
+## Examples
+Some experiments are included in exps/ dir.
+### Interpolation
+ In <code>experiments/interpolation.py</code> you have an implementation of experiment 3.1. of the [paper](). By running:
+```
+python3 interpolation.py --dataset celeba --arch beta_vae --epochs 10 --model_name celeba 
+```
+you will store in <code>results/[model_name]/figs/interpolation/</code>) figures like the following:
+
+<br>
+<p align="center">
+<img width="800" src="imgs/exp1.png">
+</p>
+<br>
+
+### Domain alignment
+ In <code>experiments/domain_alignment.py</code> you have an implementation of experiment 3.1. of the [paper](). By running:
+```
+python3 interpolation.py --dataset celeba --arch beta_vae --epochs 10 --model_name celeba 
+```
+you will store in <code>results/[model_name]/figs/interpolation/</code>) a similar figure than the following:
+
+<br>
+<p align="center">
+<img width="600" src="imgs/exp2.png">
+</p>
+<br>
+
+### Global structure
+UG-VAE  learns both local and global 
+disentanglement from random batches of data in a fully unsupervised manner, which leads to  a promising performance in 
+domain alignment and discovering non-trivial underlying structures.
+
+<br>
+<p align="center">
+<img width="600" src="imgs/exp3.png">
+</p>
+<br>
+
+## The model
+
+
 <br>
 <p align="center">
 <img width="600" src="imgs/UGVAE.png">
 </p>
 <br>
 
-## Usage
 
 

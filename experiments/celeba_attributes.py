@@ -1,3 +1,5 @@
+import sys
+sys.path.append('..')
 from datasets import *
 from models import *
 import argparse
@@ -27,7 +29,7 @@ parser.add_argument('--arch', type=str, default='beta_vae',
                     help='Architecture for the model (default: beta_vae)')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='batch size for training (default: 128)')
-parser.add_argument('--epoch', type=int, default=10,
+parser.add_argument('--epoch', type=int, default=20,
                     help='Epoch to load (default: 20)')
 parser.add_argument('--global_points', type=int, default=100, metavar='N',
                     help='Number of local points to plot (default: 100)')
@@ -42,14 +44,14 @@ args = parser.parse_args()
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Create subfolder in log dir
-folder = 'results/' + args.model_name + '/figs/maps/' + 'epoch_' + str(args.epoch) + '/'
+folder = '../results/' + args.model_name + '/figs/maps/' + 'epoch_' + str(args.epoch) + '/'
 if os.path.isdir(folder) == False:
     os.makedirs(folder)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Load model
 model = UGVAE(channels=nchannels['celeba'], dim_z=args.dim_z, dim_beta=args.dim_beta, K=args.K, arch=args.arch)
-state_dict = torch.load('./results/' + args.model_name + '/checkpoints/checkpoint_' + str(args.epoch) + '.pth',
+state_dict = torch.load('../results/' + args.model_name + '/checkpoints/checkpoint_' + str(args.epoch) + '.pth',
                         map_location=torch.device('cpu'))
 model.load_state_dict(state_dict)
 
@@ -57,7 +59,7 @@ model.load_state_dict(state_dict)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Load celeba dataset
-celeba, _,  _ = get_data('celeba')
+celeba, _,  _ = get_data('celeba', path='../data/')
 celeba_loader = torch.utils.data.DataLoader(celeba, batch_size = args.batch_size, shuffle=True)
 celeba_iter = iter(celeba_loader)
 
@@ -124,10 +126,10 @@ labels = ['Male', 'Female']
 for i in range(2):
     # Male:
     if i==0:
-        celeba_attr, _,  _ = get_data('celeba_attribute', attr=20)
+        celeba_attr, _,  _ = get_data('celeba_attribute', attr=20, path='../data/')
     # Female
     else:
-        celeba_attr, _, _ = get_data('celeba_nonattribute', attr=20)
+        celeba_attr, _, _ = get_data('celeba_nonattribute', attr=20, path='../data/')
     celeba_attr_loader = torch.utils.data.DataLoader(celeba_attr, batch_size=128, shuffle=True)
     iterator = iter(celeba_attr_loader)
 
