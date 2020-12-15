@@ -81,7 +81,7 @@ domain alignment and discovering non-trivial underlying structures.
 
 <br>
 <p align="center">
-<img width="800" src="imgs/exp3.png">
+<img width="900" src="imgs/exp3.png">
 </p>
 <br>
 
