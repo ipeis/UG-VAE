@@ -70,7 +70,7 @@ you will store in <code>results/[model_name]/figs/interpolation/</code>) a simil
 
 <br>
 <p align="center">
-<img width="600" src="imgs/exp2.png">
+<img width="400" src="imgs/exp2.png">
 </p>
 <br>
 
@@ -81,7 +81,7 @@ domain alignment and discovering non-trivial underlying structures.
 
 <br>
 <p align="center">
-<img width="600" src="imgs/exp3.png">
+<img width="800" src="imgs/exp3.png">
 </p>
 <br>
 
