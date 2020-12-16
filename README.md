@@ -58,7 +58,7 @@ UG-VAE  learns both local and global disentanglement from random batches of data
 domain alignment and discovering non-trivial underlying structures. Some experiments are included in the
 <code>experiments/</code> folder.
 ### Interpolation
- In <code>experiments/interpolation.py</code> you have an implementation of the Experiment 4.1 of the <a href="https://arxiv.org/abs/2012.08234" target="_blank">paper</a>. By running:
+ In <code>experiments/interpolation.py</code> you have an implementation of the Experiment 4.1 of the <a href="https://arxiv.org/abs/2012.08234" target="_blank" rel="noopener noreferrer">paper</a>. By running:
 ```
 python3 interpolation.py --dataset celeba --arch beta_vae --epochs 10 --model_name celeba 
 ```
