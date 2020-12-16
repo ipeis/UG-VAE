@@ -13,7 +13,7 @@ matplotlib.use("Pdf")
 
 class UGVAE(nn.Module):
     """
-    Official implementation of the UG-VAE presented in []
+    Official implementation of the UG-VAE presented in https://arxiv.org/abs/2012.08234
     beta: global variable
     z: local variable
     d: local component of the mixture
@@ -30,7 +30,7 @@ class UGVAE(nn.Module):
         self.pi_d = torch.ones(1, K) / K    # uniform prior p(d)
         self.device = device
 
-        # Convolutional architecture from beta_vae
+        # Convolutional architecture from beta_vae paper
         # valid for 64x64 images like celebA
         if arch=='beta_vae':
 
