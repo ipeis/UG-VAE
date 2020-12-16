@@ -116,4 +116,5 @@ you will obtain figures like the following:
 [Pablo M. Olmos](http://www.tsc.uc3m.es/~olmos/)
 and [Antonio Artés-Rodríguez](http://www.tsc.uc3m.es/~antonio/antonio_artes/Home.html).
 
-For further information: [ipeis@tsc.uc3m.es](ipeis@tsc.uc3m.es)
+For further information: <a href="mailto:ipeis@tsc.uc3m.es">ipeis@tsc.uc3m.es</a>
+
