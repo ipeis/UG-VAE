@@ -261,7 +261,7 @@ class CelebAFaces(Dataset):
 
 class CelebAFacesBatch(Dataset):
     """
-    This class randomly select batches from celebA and 3D FACES datasets.
+    This class randomly selects batches from celebA and 3D FACES datasets.
     For each batch, all the images come from the same dataset.
     faces/ and celeba/ folders must be inside the given path.
     CelebA -> http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html
@@ -482,7 +482,7 @@ class CarsFaces(Dataset):
 
 class CarsFacesBatch(Dataset):
     """
-    This class randomly select batches from 3D cars and 3D FACES datasets.
+    This class randomly selects batches from 3D cars and 3D FACES datasets.
     For each batch, all the images come from the same dataset.
     3D Cars ->  http://www.cs.toronto.edu/~fidler/projects/CAD.html
     3D FACES -> https://faces.dmi.unibas.ch/bfm/index.php?nav=1-1-1&id=scans
@@ -621,7 +621,7 @@ class Cars3dCars(Dataset):
 
 class Cars3dCarsBatch(Dataset):
     """
-    This class randomly select batches from Cars and 3D Cars datasets.
+    This class randomly selects batches from Cars and 3D Cars datasets.
     For each batch, all the images come from the same dataset.
     Cars dataset -> https://ai.stanford.edu/~jkrause/cars/car_dataset.html
     3D Cars ->  http://www.cs.toronto.edu/~fidler/projects/CAD.html
@@ -749,7 +749,7 @@ class CarsChairs(Dataset):
 
 class CarsChairsBatch(Dataset):
     """
-    This class randomly select batches from 3DCars and Chairs datasets.
+    This class randomly selects batches from 3DCars and Chairs datasets.
     For each batch, all the images come from the same dataset.
     3dCars dataset -> http://www.cs.toronto.edu/~fidler/projects/CAD.html
     Chairs dataset ->  https://www.di.ens.fr/willow/research/seeing3Dchairs/
