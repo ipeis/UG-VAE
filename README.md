@@ -38,8 +38,8 @@ python3 train.py --dataset mnist --arch k_vae --dim_z 10 --dim_beta 20 --K 10 --
 python3 train.py --dataset celeba_faces --arch beta_vae --dim_z 40 --dim_beta 40 --K 40 --model_name celeba_faces
 ```
 This will create a log dir in <code>results/[model_name]</code>. In <code>/checkpoints/</code>, model checkpoints for 
-each log interval are stored. In <code>/figs/</code> you will have reconstruction and samples at the end of each 
-log interval, and a plot with the losses of the training procedure. Some remarkable arguments are:
+each log interval are stored. In <code>/figs/</code> you will have reconstructions and samples at the end of each 
+log interval, and a plot with the losses during the training procedure. Some remarkable arguments are:
 - <code>--dataset</code>: you can choose among <code>celeba</code>, <code>mnist</code>, <code>celeba_faces</code>, 
   <code>cars_chairs</code> and some others included in <code>datasets.py</code>.
   For [CelebA](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html), 
