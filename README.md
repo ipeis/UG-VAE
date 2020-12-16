@@ -1,6 +1,6 @@
 # UG-VAE
-This repository contains the official Pytorch implementation of the Unsupervised Global VAE (**UG-VAE**) model proposed in the 
-paper 
+This repository contains the official Pytorch implementation of the Unsupervised Global VAE (**UG-VAE**) model proposed
+in the  paper 
 [Unsupervised Learning of Global Factors in Deep Generative Models](https://arxiv.org/abs/2012.08234).
 
 
@@ -25,7 +25,8 @@ scikit-learn 0.23.2
 ```
 
 ## Usage
-UGVAE is implemented as a class that inherits from Pytorch <code>nn.Module</code> in <code>models.py</code>. You can train UGVAE using the <code>train.py</code> script. A few examples are included
+UG-VAE is implemented as a class that inherits from Pytorch <code>nn.Module</code> in <code>models.py</code>. You can 
+train UG-VAE using the <code>train.py</code> script. A few examples are included
 below:
 ```
 # example for training celeba:
@@ -54,9 +55,9 @@ log interval, and a plot with the losses during the training procedure. Some rem
 - <code>--no_cuda</code> for disabling GPU training.
 
 ## Examples
-UG-VAE  learns both local and global disentanglement from random batches of data in a fully unsupervised manner, which leads to  a promising performance in 
-domain alignment and discovering non-trivial underlying structures. Some experiments are included in the
-<code>experiments/</code> folder.
+UG-VAE  learns both local and global disentanglement from random batches of data in a fully unsupervised manner, which 
+leads to  a promising performance in domain alignment and discovering non-trivial underlying structures. Some 
+experiments are included in the <code>experiments/</code> folder.
 ### Interpolation
  In <code>experiments/interpolation.py</code> you have an implementation of the Experiment 4.1 of the 
  [paper](https://arxiv.org/abs/2012.08234). By running:
@@ -108,6 +109,3 @@ you will obtain figures like the following:
 <img width="400" src="imgs/exp32.png">
 </p>
 <br>
-
-
-
