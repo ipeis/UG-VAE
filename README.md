@@ -82,7 +82,7 @@ you will store in <code>results/[model_name]/figs/interpolation/</code>) a simil
 
 <br>
 <p align="center">
-<img width="300" src="imgs/exp2.png">
+<img width="400" src="imgs/exp2.png">
 </p>
 <br>
 
