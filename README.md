@@ -55,7 +55,8 @@ log interval, and a plot with the losses during the training procedure. Some rem
 
 ## Examples
 UG-VAE  learns both local and global disentanglement from random batches of data in a fully unsupervised manner, which leads to  a promising performance in 
-domain alignment and discovering non-trivial underlying structures. Some experiments are included in <code>exps/</code> dir.
+domain alignment and discovering non-trivial underlying structures. Some experiments are included in the
+<code>experiments/</code> folder.
 ### Interpolation
  In <code>experiments/interpolation.py</code> you have an implementation of the Experiment 4.1 of the <a href="https://arxiv.org/abs/2012.08234" target="_blank">paper</a>. By running:
 ```
