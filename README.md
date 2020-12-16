@@ -1,10 +1,10 @@
 # UG-VAE
 This repository contains the official Pytorch implementation of the Unsupervised Global VAE (**UG-VAE**) model proposed in the 
 paper 
-<a href="https://arxiv.org/abs/2012.08234" target="_blank">Unsupervised Learning of Global Factors in Deep Generative Models</a>
+[Unsupervised Learning of Global Factors in Deep Generative Models](https://arxiv.org/abs/2012.08234).
 
-Please, if you use this code, cite the <a href="https://arxiv.org/abs/2012.08234" target="_blank">preprint</a>
- using:
+
+Please, if you use this code, cite the [preprint](https://arxiv.org/abs/2012.08234) using:
 ```
 @article{UGVAE_PeisOlmosArtes,
   title = {Unsupervised Learning of Global Factors in Deep Generative Models},
@@ -58,7 +58,8 @@ UG-VAE  learns both local and global disentanglement from random batches of data
 domain alignment and discovering non-trivial underlying structures. Some experiments are included in the
 <code>experiments/</code> folder.
 ### Interpolation
- In <code>experiments/interpolation.py</code> you have an implementation of the Experiment 4.1 of the <a href="https://arxiv.org/abs/2012.08234" target="_blank" rel="noopener noreferrer">paper</a>. By running:
+ In <code>experiments/interpolation.py</code> you have an implementation of the Experiment 4.1 of the 
+ [paper](https://arxiv.org/abs/2012.08234). By running:
 ```
 python3 interpolation.py --dataset celeba --arch beta_vae --epochs 10 --model_name celeba 
 ```
@@ -71,7 +72,8 @@ you will store in <code>results/[model_name]/figs/interpolation/</code>) figures
 <br>
 
 ### Domain alignment
-In <code>experiments/domain_alignment.py</code> you have an implementation of experiment 4.2 of the <a href="https://arxiv.org/abs/2012.08234" target="_blank">paper</a>. By running:
+In <code>experiments/domain_alignment.py</code> you have an implementation of experiment 4.2 of the 
+[paper](https://arxiv.org/abs/2012.08234). By running:
 ```
 python3 interpolation.py --dataset celeba --arch beta_vae --epochs 10 --model_name celeba 
 ```
@@ -85,7 +87,7 @@ you will store in <code>results/[model_name]/figs/interpolation/</code>) a simil
 
 ### Global structure
 In <code>experiments/celeba_attributes.py</code> and <code>experiments/mnist_series.py</code> you have an implementation
-of experiment 4.3 of the <a href="https://arxiv.org/abs/2012.08234" target="_blank">paper</a>. By running:
+of experiment 4.3 of the [paper](https://arxiv.org/abs/2012.08234). By running:
 ```
 python3 celeba_attributes.py
 ```
