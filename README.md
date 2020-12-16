@@ -105,7 +105,7 @@ python3 mnist_series.py
 you will obtain figures like the following:
 <br>
 <p align="center">
-<img width="900" src="imgs/exp32.png">
+<img width="400" src="imgs/exp32.png">
 </p>
 <br>
 
