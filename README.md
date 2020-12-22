@@ -6,11 +6,11 @@ in the  paper
 
 Please, if you use this code, cite the [preprint](https://arxiv.org/abs/2012.08234) using:
 ```
-@article{UGVAE_PeisOlmosArtes,
-  title = {Unsupervised Learning of Global Factors in Deep Generative Models},
-  author = {Peis, Ignacio and Olmos, Pablo M and Art\'es-Rodr\'iguez, Antonio},
-  journal = {arXiv preprint arXiv:2012.08234},
-  year = {2020}
+@article{peis2020unsupervised,
+  title={Unsupervised Learning of Global Factors in Deep Generative Models},
+  author={Peis, Ignacio and Olmos, Pablo M and Art{\'e}s-Rodr{\'\i}guez, Antonio},
+  journal={arXiv preprint arXiv:2012.08234},
+  year={2020}
 }
 ```
 
