@@ -3,6 +3,8 @@ import torch
 import torch.utils.data
 from torch import nn
 from torch.nn import functional as F
+from torch.distributions.categorical import Categorical as Categorical
+from torch.distributions import MultivariateNormal as Normal
 import numpy as np
 import matplotlib
 matplotlib.use("Pdf")
@@ -206,6 +208,27 @@ class UGVAE(nn.Module):
         # To maximize ELBO we minimize loss (-ELBO)
         return -logp + KLz + KLd + KLbeta, -logp, KLz, KLd, KLbeta
 
+    # Sample from the model
+    def sample(self, nbatches, batch_size):
+        samples = []
+        for n in range(nbatches):
+            beta = torch.randn(self.dim_beta).to(self.device)
+            mus_z, vars_z = self._z_prior(beta)
+            d = Categorical(torch.ones(self.K) * 1 / self.K).sample([batch_size])
+            z = torch.stack([Normal(mus_z[d_i], torch.diag(vars_z[d_i])).sample().to(self.device) for d_i in d])
+            samples.append(self._decode(z, beta))
+        return samples
+
+    # Sample from the model only from a specific component d
+    def sample_component(self, nbatches, batch_size, d):
+        samples = []
+        for n in range(nbatches):
+            beta = torch.randn(self.dim_beta).to(self.device)
+            mus_z, vars_z = self._z_prior(beta)
+            z = torch.stack(
+                [Normal(mus_z[d], torch.diag(vars_z[d])).sample().to(self.device) for i in range(batch_size)])
+            samples.append(self._decode(z, beta))
+        return samples
 
 #----------------------------------------------------------------------------------------------------------------------#
 
@@ -230,7 +253,6 @@ class MLVAE(nn.Module):
                 nn.Conv2d(channels, 32, 4, 2, 1),           # B,  32, 32, 32
                 nn.BatchNorm2d(32),
                 nn.ReLU(True),
-                nn.Conv2d(32, 32, 4, 2, 1),                 # B,  32, 16, 16
                 nn.Conv2d(32, 32, 4, 2, 1),                 # B,  32, 16, 16
                 nn.BatchNorm2d(32),
                 nn.ReLU(True),
